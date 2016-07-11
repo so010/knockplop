@@ -1,0 +1,105 @@
+body {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: transparent; }
+
+#videoDivWrapper {
+  height: 85vh;
+  position: fixed;
+  left: 1%;
+  right: 1%;
+  text-align: center;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  top: 50%;
+  transform: translate(0%, -50%);
+  pointer-events: none; }
+
+#videoContainer {
+  position: relative;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 100%;
+  transition: 0.2s;
+  pointer-events: auto; }
+
+.videoDiv {
+  padding: 2px;
+  border: 0;
+  margin: 0;
+  position: relative;
+  top: 0%;
+  transform: translate(0%, 0%);
+  display: inline-block;
+  height: 100%; }
+
+video {
+  height: 100%;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  border-radius: 7px; }
+
+.overlayTopRight {
+  z-index: 99;
+  right: 2px;
+  top: 2px;
+  background-color: rgba(100, 100, 100, 0.3);
+  position: absolute;
+  font-size: 3em;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex;
+  cursor: pointer; }
+
+.overlayTopLeft {
+  top: 2px;
+  left: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 3.5vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex; }
+
+.overlayBottomRight {
+  bottom: 2px;
+  right: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 3.5vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex; }
+
+.overlayBottomLeft {
+  bottom: 2px;
+  left: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 4.5vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex; }
+
+#bigVideoContainer {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  position: fixed;
+  z-index: -1; }
+
+#bigVideoContainer video {
+  object-fit: cover;
+  width: 100%;
+  height: 100%; }

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Meet</title>
+  </head>
+  <style>
+    body{
+      margin:auto;
+      padding:0;
+      text-align:center;
+      position: fixed;
+      left: 50%;
+      top: 40%;
+      transform: translate(-50%, 0%);
+      width:100vw;
+      height:100vh
+      font-size:3em;
+    }
+    input[type=text]{
+      font-size:2em;
+    }
+    input[type=submit]{
+      font-size:2em;
+    }
+  </style>
+  <body>
+    <form onsubmit="location.go()" method="post">
+      <input id="room" type="text" value="" placeholder="your room name">
+      <input type="submit" value="enter your room">
+    </form>
+  </body>
+  <script>
+    var room = document.getElementById("room");
+    var stateObj = { foo: "bar" };
+
+    room.addEventListener("input", function(e) {
+      console.log(room.value);
+      history.replaceState(stateObj, "meet", "/"+room.value);
+    },true);
+    room.focus();
+  </script>
+</html>

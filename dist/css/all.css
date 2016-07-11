@@ -1,0 +1,183 @@
+@font-face {
+  font-family: 'Material Icons';
+  font-weight: 400;
+  src: url(../material-design-icons/iconfont/MaterialIcons-Regular.eot);
+  /* For IE6-8 */
+  src: local("Material Icons"), local("MaterialIcons-Regular"), url(../material-design-icons/iconfont/MaterialIcons-Regular.woff2) format("woff2"), url(../material-design-icons/iconfont/MaterialIcons-Regular.woff) format("woff"), url(../material-design-icons/iconfont/MaterialIcons-Regular.ttf) format("truetype"); }
+
+.material-icons {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+  /* Support for all WebKit browsers. */
+  -webkit-font-smoothing: antialiased;
+  /* Support for Safari and Chrome. */
+  text-rendering: optimizeLegibility;
+  /* Support for Firefox. */
+  -moz-osx-font-smoothing: grayscale;
+  /* Support for IE. */
+  font-feature-settings: 'liga'; }
+
+.material-icons.md-dark {
+  color: rgba(0, 0, 0, 0.54); }
+
+.material-icons.md-dark.md-inactive {
+  color: rgba(0, 0, 0, 0.26); }
+
+.material-icons.md-light {
+  color: white; }
+
+.material-icons.md-light.md-inactive {
+  color: rgba(255, 255, 255, 0.3); }
+
+@font-face {
+  font-family: 'Material Icons';
+  font-weight: 400;
+  src: url(../material-design-icons/iconfont/MaterialIcons-Regular.eot);
+  /* For IE6-8 */
+  src: local("Material Icons"), local("MaterialIcons-Regular"), url(../material-design-icons/iconfont/MaterialIcons-Regular.woff2) format("woff2"), url(../material-design-icons/iconfont/MaterialIcons-Regular.woff) format("woff"), url(../material-design-icons/iconfont/MaterialIcons-Regular.ttf) format("truetype"); }
+
+.material-icons {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+  /* Support for all WebKit browsers. */
+  -webkit-font-smoothing: antialiased;
+  /* Support for Safari and Chrome. */
+  text-rendering: optimizeLegibility;
+  /* Support for Firefox. */
+  -moz-osx-font-smoothing: grayscale;
+  /* Support for IE. */
+  font-feature-settings: 'liga'; }
+
+.material-icons.md-dark {
+  color: rgba(0, 0, 0, 0.54); }
+
+.material-icons.md-dark.md-inactive {
+  color: rgba(0, 0, 0, 0.26); }
+
+.material-icons.md-light {
+  color: white; }
+
+.material-icons.md-light.md-inactive {
+  color: rgba(255, 255, 255, 0.3); }
+
+body {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: transparent; }
+
+#videoDivWrapper {
+  height: 85vh;
+  position: fixed;
+  left: 1%;
+  right: 1%;
+  text-align: center;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  top: 50%;
+  transform: translate(0%, -50%);
+  pointer-events: none; }
+
+#videoContainer {
+  position: relative;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 100%;
+  transition: 0.2s;
+  pointer-events: auto; }
+
+.videoDiv {
+  padding: 2px;
+  border: 0;
+  margin: 0;
+  position: relative;
+  top: 0%;
+  transform: translate(0%, 0%);
+  display: inline-block;
+  height: 100%; }
+
+video {
+  height: 100%;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  border-radius: 7px; }
+
+.overlayTopRight {
+  z-index: 99;
+  right: 2px;
+  top: 2px;
+  background-color: rgba(100, 100, 100, 0.3);
+  position: absolute;
+  font-size: 3em;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex;
+  cursor: pointer; }
+
+.overlayTopLeft {
+  top: 2px;
+  left: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 3.5vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex; }
+
+.overlayBottomRight {
+  bottom: 2px;
+  right: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 3.5vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex; }
+
+.overlayBottomLeft {
+  bottom: 2px;
+  left: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 4.5vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex; }
+
+#bigVideoContainer {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  position: fixed;
+  z-index: -1; }
+
+#bigVideoContainer video {
+  object-fit: cover;
+  width: 100%;
+  height: 100%; }

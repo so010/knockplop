@@ -1,0 +1,9 @@
+{
+  "name": "meet",
+  "version": "0.0.1",
+  "dependencies": {
+    "material-design-icons": "~2.2.3",
+    "bootstrap": "~3.3.6"
+  },
+  "private": true
+}

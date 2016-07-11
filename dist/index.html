@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="bootstrap/dist/css/bootstrap.min.css">
+        <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+        <script src="/socket.io/socket.io.js"></script>
+        <script src="scripts/app.js"></script>
+        <script src="jquery/dist/jquery.min.js"></script>
+        <script src="bootstrap/dist/js/bootstrap.min.js"></script>
+	<script src="client-config.js"></script>
+	<link rel="stylesheet" type="text/css" href="css/all.css">
+        <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport' />
+    </head>
+
+    <body>
+      <div id="bigVideoContainer">
+        <div class="overlayTopRight fadeOutElements">
+          <span class="exitBigVideoIcon material-icons md-light hidden"
+            onclick="exitBigVideo()">
+            arrow_drop_down
+          </span>
+          <span class="fullscreenIcon material-icons md-light"
+            onclick="toggleFullScreen()">
+            fullscreen
+          </span>
+          <span class="exitFullscreenIcon material-icons md-light hidden"
+            onclick="toggleFullScreen()">
+            fullscreen_exit
+          </span>
+        </div>
+    </div>
+      <div id="videoDivWrapper">
+        <div id="videoContainer"></div>
+      </div>
+      <div id="templateVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
+        onmousemove="onMouseMoveAction(event.currentTarget.id)">
+        <div class="overlayTopRight fadeOutElements">
+          <span class="videoMuteIcon material-icons md-light hidden"
+            onclick="unMuteVideo(event.target.parentElement.parentElement.id)">
+            videocam_off
+          </span>
+          <span class="videoUnMuteIcon material-icons md-light"
+            onclick="muteVideo(event.target.parentElement.parentElement.id)">
+            videocam
+          </span>
+          <span class="audioMuteIcon material-icons md-light hidden"
+            onclick="unMuteAudio(event.target.parentElement.parentElement.id)">
+            mic_off
+          </span>
+          <span class="audioUnMuteIcon material-icons md-light"
+            onclick="muteAudio(event.target.parentElement.parentElement.id)">
+            mic
+          </span>
+          <span class="bigVideoIcon material-icons md-light"
+            onclick="setBigVideo(event.target.parentElement.parentElement.id)">
+            arrow_drop_up
+          </span>
+        </div>
+      </div>
+      <script type="text/javascript">
+        pageReady();
+      </script>
+    </body>
+</html>

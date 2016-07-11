@@ -1,0 +1,6 @@
+var httpsConfig = {
+    key: fs.readFileSync('/etc/ssl/private/keyfile.key'),
+    cert: fs.readFileSync('/etc/ssl/private/certfile.pem')
+//    ,ca: fs.readFileSync('/etc/ssl/private/CAfile.pem')
+};
+
