@@ -1,4 +1,7 @@
-var httpsConfig = {
+var config = module.exports = {}
+var fs = require('fs');
+
+config.httpsConfig = {
     key: fs.readFileSync('/etc/ssl/private/keyfile.key'),
     cert: fs.readFileSync('/etc/ssl/private/certfile.pem')
 //    ,ca: fs.readFileSync('/etc/ssl/private/CAfile.pem')
