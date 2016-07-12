@@ -20,24 +20,32 @@
     input[type=text]{
       font-size:2em;
     }
-    input[type=submit]{
+    button{
       font-size:2em;
     }
   </style>
   <body>
-    <form onsubmit="location.go()" method="post">
-      <input id="room" type="text" value="" placeholder="your room name">
-      <input type="submit" value="enter your room">
-    </form>
+    <input id="room" type="text" onkeypress="checkEnter(event)" value="" placeholder="your room name">
+    <button onclick = "start(location.href)">enter your room</button>
   </body>
   <script>
     var room = document.getElementById("room");
     var stateObj = { foo: "bar" };
 
     room.addEventListener("input", function(e) {
-      console.log(room.value);
+      console.log(e.charCode);
       history.replaceState(stateObj, "meet", "/"+room.value);
     },true);
     room.focus();
+    function start(target){
+      location.href;history.replaceState(stateObj, "meet", "/");
+      window.location = target;
+    }
+    function checkEnter(event){
+      var x = event.charCode || event.keyCode;
+      if (x == 13 ) {  
+        start(location.href);
+      }
+    }
   </script>
 </html>
