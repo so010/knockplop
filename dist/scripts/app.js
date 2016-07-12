@@ -8,7 +8,7 @@ var dragLastOver,dragSource;
 var hidingElementsStatus = "visible";
 
 function pageReady() {
-  room = document.documentURI.split("/")[3];
+  room = document.URL.split("/")[3];
   localVideo = document.getElementById('localVideo');
   videoContainer = document.getElementById('videoContainer');
   bigVideoContainer = document.getElementById('bigVideoContainer');
@@ -44,7 +44,7 @@ function getUserMediaSuccess(stream) {
 }
 
 function initSocket() {
-  socket = io('https://meet.uninett.no');
+  socket = io('https://'+document.domain);
   socket.on('connection',function(socket){
     console.log('Socket connected!');
   });
