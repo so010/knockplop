@@ -18,7 +18,7 @@ and share these URL to other users ...
 ### Install
 
 - clone repository `git clone github.com:so010/knockplop.git`
-- install nodejs (standard distribution repository is usually outdated or broken instead use somethink like [nodesource](https://nodejs.org/en/download/package-manager) )  
+- install nodejs (standard distribution repository is usually outdated or broken instead use something like [nodesource](https://nodejs.org/en/download/package-manager) )  
 - change to cloned repository `cd knockplop`
 - install npm depencies: `npm install` 
 - install bower depencies: `bower install`
