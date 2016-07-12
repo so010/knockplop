@@ -10,7 +10,6 @@
     "bower": "^1.7.9",
     "gulp": "^3.9.1",
     "gulp-concat": "^2.6.0",
-    "gulp-connect": "^4.1.0",
     "gulp-nodemon": "^2.1.0",
     "gulp-sass": "^2.3.2",
     "wiredep": "^4.0.0"
