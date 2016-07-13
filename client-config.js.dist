@@ -7,4 +7,4 @@ var peerConnectionConfig = {
         {'username':'turnuser','credential':'turnpassword','urls': 'turns:turnserver_IP:port?transport=tcp'},
         {'username':'turnuser','credential':'turnpassword','urls': 'turns:turnserver_IP:port?transport=udp'},
     ]
-
+}
