@@ -1,5 +1,3 @@
-var HTTPS_PORT = 8443;
-var HTTP_PORT = 8080;
 
 var fs = require('fs');
 var express = require('express');
@@ -32,15 +30,15 @@ app.all('/*', function (req, res) {
    console.log(req.url);
    res.sendFile(__dirname + '/' +'dist/index.html');
 })
-httpsServer.listen(HTTPS_PORT, '0.0.0.0');
+httpsServer.listen(config.HTTPS_PORT, '0.0.0.0');
 
 // redirect to https
 httpApp.all('*',function (req, res) {
-    res.redirect(301, "https://" + req.hostname + ":" + HTTPS_PORT + req.path);
-    console.log('HTTP request -> redirecting: ' + "https://" + req.hostname + ":" + HTTPS_PORT + req.path);
+    res.redirect(301, "https://" + req.hostname + ":" + config.HTTPS_PORT + req.path);
+    console.log('HTTP request -> redirecting: ' + "https://" + req.hostname + ":" + config.HTTPS_PORT + req.path);
     res.end();
 });
-httpServer.listen(HTTP_PORT, '0.0.0.0');
+httpServer.listen(config.HTTP_PORT, '0.0.0.0');
 
 
 // ----------------------------------------------------------------------------------------
@@ -75,4 +73,4 @@ io.on('connection', function(socket) {
 });
 
 
-console.log('Server running. listening on port:',HTTP_PORT,HTTPS_PORT);
+console.log('Server running. listening on port:',config.HTTP_PORT,config.HTTPS_PORT);
