@@ -6,4 +6,5 @@ config.httpsConfig = {
     cert: fs.readFileSync('/etc/ssl/private/certfile.pem')
 //    ,ca: fs.readFileSync('/etc/ssl/private/CAfile.pem')
 };
-
+config.HTTP_PORT = 80;
+config.HTTPS_PORT = 443;
