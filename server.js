@@ -4,6 +4,7 @@ var HTTP_PORT = 8080;
 var fs = require('fs');
 var express = require('express');
 var app = express();
+var httpApp = express();
 var http = require('http');
 var https = require('https');
 var WebSocketServer = require('ws').Server;
@@ -11,6 +12,7 @@ var config = require('./server-config');
 
 // Yes, SSL is required
 var httpsServer = https.createServer(config.httpsConfig, app);
+var httpServer = http.createServer(httpApp);
 var io = require('socket.io')(httpsServer);
 
 // ----------------------------------------------------------------------------------------
@@ -30,14 +32,16 @@ app.all('/*', function (req, res) {
    console.log(req.url);
    res.sendFile(__dirname + '/' +'dist/index.html');
 })
-
-// redirect to https:
-http.createServer(function (req, res) {
-    res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url});
-    res.end();
-}).listen(HTTP_PORT);
-
 httpsServer.listen(HTTPS_PORT, '0.0.0.0');
+
+// redirect to https
+httpApp.all('*',function (req, res) {
+    res.redirect(301, "https://" + req.hostname + ":" + HTTPS_PORT + req.path);
+    console.log('HTTP request -> redirecting: ' + "https://" + req.hostname + ":" + HTTPS_PORT + req.path);
+    res.end();
+});
+httpServer.listen(HTTP_PORT, '0.0.0.0');
+
 
 // ----------------------------------------------------------------------------------------
 
