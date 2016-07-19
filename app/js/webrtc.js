@@ -127,6 +127,8 @@ function addStream( stream, pid ) {
   if ( pid == "localStream" ) {
     video.muted = true;
     videoDiv.style.height = "100%";
+  } else {
+  videoDiv.style.opacity = "0"; // invisible until layout is settled
   }
   videoDiv.appendChild(video);
   lastVideoDiv = videoContainer.lastElementChild;
@@ -243,6 +245,14 @@ function toggleFullScreen() {
   }
 }
 
+function unHideOpaqueElements(container){
+  children = container.children
+  for(i=0;i < children.length ;i++){
+    if ( children[i].style.opacity == '0'  ) { children[i].style.opacity = '1' }
+  }
+ 
+}
+
 // checks if the last videoDiv fits on the screen
 // checks if there is to much space between bottom of last videoDiv and bottom of screen
 // and scale videoDiv height up or down
@@ -277,11 +287,15 @@ function checkVideoContainer(){
                 window.innerWidth * 0.01 ) * 100 / window.innerWidth * 0.99 ) / 10 + "%"
         }
         videoContainerChanged = true;
+        unHideOpaqueElements(videoContainer)
         window.setTimeout(checkVideoContainer,20 );
     } else {
         // check if videoContainer was modified before so it should be finished
         // now - so we can redraw it ( because chrome live rendering is not perfect )
-        if ( videoContainerChanged == true ) { forceRedraw(videoContainer) }
+        if ( videoContainerChanged == true ) { 
+          forceRedraw(videoContainer) 
+        }
+        unHideOpaqueElements(videoContainer)
         window.setTimeout(checkVideoContainer, 200 ); // standard recheck timeframe
         videoContainerChanged = false;
     }
