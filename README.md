@@ -45,7 +45,7 @@ With the server running, open a recent version of Firefox or Chrome and visit `h
 
 ### Development
 
-We use [gulp](gulpjs.com) to automate som building tasks. 
+We use [gulp](http://gulpjs.com) to automate som building tasks. 
 You have to install gulp: `npm install --global gulp`
 and run gulp: 
 ```shell
