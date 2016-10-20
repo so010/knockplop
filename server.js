@@ -13,15 +13,41 @@ var httpsServer = https.createServer(config.httpsConfig, app);
 var httpServer = http.createServer(httpApp);
 var io = require('socket.io')(httpsServer);
 
+var stunrestanswer;
 // ----------------------------------------------------------------------------------------
 
+// add pug template engine
+app.set('view engine', 'pug');
+app.set('views', './views')
 
 // app.use(express.static(__dirname + '/dist'));
 app.use(express.static(__dirname + '/bower_components'));
 app.use('/pix',express.static(__dirname + '/pix'));
 app.use('/scripts',express.static(__dirname + '/dist/scripts'));
 app.use('/css',express.static(__dirname + '/dist/css'));
-app.use('/client-config.js',express.static(__dirname + '/client-config.js'));
+
+
+app.get('/client-config.js', function (req, res) {
+  var request = require('request');
+  var request_uri;
+  if (req.ip) {
+    request_uri = config.REST_API_URI + '&ip=' + req.ip;
+  } else {
+    request_uri=config.REST_API_URI;
+  }
+  request(request_uri, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      stunrestanswer=JSON.parse(body);
+      //console.log(body); // Show the HTML for the Google homepage.
+      //console.log( stunrestanswer);
+      //console.log('username: '+ stunrestanswer.username);
+      res.render('client-config.pug', { urls: stunrestanswer.uris, username: stunrestanswer.username, credential: stunrestanswer.password});
+    } else {
+      console.log("STUN/TURN REST API call" + error);
+    }
+  });
+});
+
 app.get('/', function (req, res) {
    console.log(req.url);
    res.sendFile(__dirname + '/' + 'dist/chooseRoom.html');

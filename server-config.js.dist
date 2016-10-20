@@ -8,3 +8,6 @@ config.httpsConfig = {
 };
 config.HTTP_PORT = 80;
 config.HTTPS_PORT = 443;
+config.REST_API_KEY = 'CHANGE ME TO API KEY';
+config.REST_API_URI = 'https://brain.lab.vvc.niif.hu/restapi/turn?uri_schema=turn&transport=tcp&ip_ver=ipv4&servercount=2&api_key='+config.REST_API_KEY;
+ 
