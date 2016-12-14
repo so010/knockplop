@@ -44,7 +44,7 @@ function getUserMediaSuccess(stream) {
 }
 
 function initSocket() {
-  socket = io('https://'+document.domain);
+  socket = io('https://'+document.domain+':'+document.location.port);
   socket.on('connection',function(socket){
     console.log('Socket connected!');
   });

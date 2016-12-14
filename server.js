@@ -1,5 +1,3 @@
-var HTTPS_PORT = 8443;
-var HTTP_PORT = 8080;
 
 var fs = require('fs');
 var express = require('express');
@@ -35,9 +33,9 @@ app.all('/*', function (req, res) {
 http.createServer(function (req, res) {
     res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url});
     res.end();
-}).listen(HTTP_PORT);
+}).listen(config.HTTP_PORT);
 
-httpsServer.listen(HTTPS_PORT, '0.0.0.0');
+httpsServer.listen(config.HTTPS_PORT, '0.0.0.0');
 
 // ----------------------------------------------------------------------------------------
 
@@ -71,4 +69,4 @@ io.on('connection', function(socket) {
 });
 
 
-console.log('Server running. listening on port:',HTTP_PORT,HTTPS_PORT);
+console.log('Server running. listening on port:',config.HTTPS_PORT, config.HTTP_PORT);
