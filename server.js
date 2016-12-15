@@ -10,7 +10,9 @@ var config = require('./server-config');
 // Yes, SSL is required
 var httpsServer = https.createServer(config.httpsConfig, app);
 var io = require('socket.io')(httpsServer);
+var request = require('request');
 
+var stunrestanswer;
 // ----------------------------------------------------------------------------------------
 
 
@@ -40,12 +42,31 @@ httpsServer.listen(config.HTTPS_PORT, '0.0.0.0');
 // ----------------------------------------------------------------------------------------
 
 io.on('connection', function(socket) {
-  console.log(socket.request.connection.remoteAddress);
+  console.log(socket.request.connection.remoteAddress,socket.id);
+  var request_uri;
+  socket.ready = false;
+  if (socket.request.connection.remoteAddress) {
+    request_uri = config.REST_API_URI + '&ip=' + socket.request.connection.remoteAddress;
+  } else {
+    request_uri=config.REST_API_URI;
+  }
+  request(request_uri, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      stunrestanswer=JSON.parse(body);
+      // console.log( stunrestanswer);
+      socket.restTURN= { urls: stunrestanswer.uris, username: stunrestanswer.username, credential: stunrestanswer.password };
+      console.log('sending restTURN:',socket.restTURN,socket.id);
+      socket.emit('restTURN',{'restTURN':socket.restTURN});
+    } else {
+      console.log("STUN/TURN REST API call: " + response + error);
+    }
+  });
   socket.on('ready', function(room) {
     console.log('new participant: %s in room: %s', socket.id, room);
     socket.join(room);
+    socket.ready = true;
     socket.room = room;
-    socket.broadcast.to(room).emit('participantReady',{'pid':socket.id});
+    socket.broadcast.to(room).emit('participantReady',{'pid':socket.id, 'restTURN':socket.restTURN});
   });
   socket.on('sdp', function(msg) {
     console.log('received sdp from %s type: %s > forward to %s ...',

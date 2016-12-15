@@ -4,6 +4,7 @@
   "description": "basic WebRTC meeting service",
   "dependencies": {
     "express": "^4.14.0",
+    "request": "^2.75.0",
     "socket.io": "^1.4.6"
   },
   "devDependencies": {
