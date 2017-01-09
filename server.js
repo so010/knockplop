@@ -58,7 +58,8 @@ io.on('connection', function(socket) {
       console.log('sending restTURN:',socket.restTURN,socket.id);
       socket.emit('restTURN',{'restTURN':socket.restTURN});
     } else {
-      console.log("STUN/TURN REST API call: " + response + error);
+      console.log("STUN/TURN REST API call: Error: "+ response.statuscode + error );
+      socket.emit('restTURN',{'restTURN':null});
     }
   });
   socket.on('ready', function(room) {
