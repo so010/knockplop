@@ -50,9 +50,14 @@ function initSocket() {
     console.log('Socket connected!');
   });
   socket.on('restTURN',function(msg){
-    console.log('received restTURN from server :)');
-    restTURN = msg.restTURN;
-    peerConnectionConfig.iceServers.push(msg.restTURN);
+    if ( msg.restTURN != null ) { 
+      console.log('received restTURN from server :)');
+      restTURN = msg.restTURN;
+      peerConnectionConfig.iceServers.push(msg.restTURN);
+    }
+    else {
+      console.log('received empty restTURN config from server :(');
+    }
     // inform the server that this client is ready to stream:
     socket.emit('ready',room);
   });
@@ -95,9 +100,11 @@ function initSocket() {
 
 function callParticipant(msg) {
     participantList[msg.pid] = {};
-    if ( typeof(msg.restTURN) != 'undefined') participantList[msg.pid].restTURN=msg.restTURN;
     tempPeerConnectionConfig = peerConnectionConfig;
-    tempPeerConnectionConfig.iceServers.push(participantList[msg.pid].restTURN);
+    if ( typeof(msg.restTURN) != 'undefined') {
+      participantList[msg.pid].restTURN=msg.restTURN; 
+      tempPeerConnectionConfig.iceServers.push(participantList[msg.pid].restTURN);
+    }
     participantList[msg.pid].peerConnection = new RTCPeerConnection(tempPeerConnectionConfig);
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
@@ -106,10 +113,15 @@ function callParticipant(msg) {
 }
 
 function deleteParticipant(pid){
-  console.log('removing participant: ',pid)
-  participantList[pid].peerConnection.close();
-  participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
-  delete participantList[pid];
+  if (typeof(participantList[pid]) != 'undefined'){
+    console.log('removing participant: ',pid)
+    participantList[pid].peerConnection.close();
+    participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
+    delete participantList[pid];
+  }
+  else{
+    console.log('removing participant: participant does not exist: ',pid)
+  }
 }
 
 function gotIceCandidate(candidate, pid) {
