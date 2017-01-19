@@ -148,9 +148,7 @@ function addStream( stream, pid ) {
   videoDiv = document.getElementById("templateVideoDiv").cloneNode(true);
   participantList[pid].mediaStream = stream;
   var video = document.createElement('video');
-  var source = document.createElement('source');
-  source.src = window.URL.createObjectURL(stream);
-  video.appendChild(source)
+  video.srcObject = stream;
   video.autoplay = true;
   if ( pid == "localStream" ) {
     video.muted = true;
@@ -218,9 +216,7 @@ function setBigVideo(pid){
     bigVideoContainer.removeChild( bigVideoContainer.getElementsByTagName('video')[0] );
   }
   var video = document.createElement('video');
-  var source = document.createElement('source');
-  source.src = window.URL.createObjectURL(participantList[pid].mediaStream);
-  video.appendChild(source);
+  video.srcObject = participantList[pid].mediaStream;
   video.autoplay = true;
   if ( pid == "localStream" ) {
     video.muted = true;
