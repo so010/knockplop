@@ -12,7 +12,9 @@ var config = require('./server-config');
 var httpsServer = https.createServer(config.httpsConfig, app);
 var httpServer = http.createServer(httpApp);
 var io = require('socket.io')(httpsServer);
+var request = require('request');
 
+var stunrestanswer;
 // ----------------------------------------------------------------------------------------
 
 
@@ -37,19 +39,39 @@ httpApp.all('*',function (req, res) {
     res.redirect(301, "https://" + req.hostname + ":" + config.HTTPS_PORT + req.path);
     console.log('HTTP request -> redirecting: ' + "https://" + req.hostname + ":" + config.HTTPS_PORT + req.path);
     res.end();
-});
-httpServer.listen(config.HTTP_PORT, '0.0.0.0');
+}).listen(config.HTTP_PORT);
 
+httpsServer.listen(config.HTTPS_PORT, '0.0.0.0');
 
 // ----------------------------------------------------------------------------------------
 
 io.on('connection', function(socket) {
-  console.log(socket.request.connection.remoteAddress);
+  console.log(socket.request.connection.remoteAddress,socket.id);
+  var request_uri;
+  socket.ready = false;
+  if (socket.request.connection.remoteAddress) {
+    request_uri = config.REST_API_URI + '&ip=' + socket.request.connection.remoteAddress;
+  } else {
+    request_uri=config.REST_API_URI;
+  }
+  request(request_uri, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      stunrestanswer=JSON.parse(body);
+      // console.log( stunrestanswer);
+      socket.restTURN= { urls: stunrestanswer.uris, username: stunrestanswer.username, credential: stunrestanswer.password };
+      console.log('sending restTURN:',socket.restTURN,socket.id);
+      socket.emit('restTURN',{'restTURN':socket.restTURN});
+    } else {
+      console.log("STUN/TURN REST API call: Error: "+ response.statuscode + error );
+      socket.emit('restTURN',{'restTURN':null});
+    }
+  });
   socket.on('ready', function(room) {
     console.log('new participant: %s in room: %s', socket.id, room);
     socket.join(room);
+    socket.ready = true;
     socket.room = room;
-    socket.broadcast.to(room).emit('participantReady',{'pid':socket.id});
+    socket.broadcast.to(room).emit('participantReady',{'pid':socket.id, 'restTURN':socket.restTURN});
   });
   socket.on('sdp', function(msg) {
     console.log('received sdp from %s type: %s > forward to %s ...',
@@ -73,4 +95,4 @@ io.on('connection', function(socket) {
 });
 
 
-console.log('Server running. listening on port:',config.HTTP_PORT,config.HTTPS_PORT);
+console.log('Server running. listening on port:',config.HTTPS_PORT, config.HTTP_PORT);
