@@ -44,13 +44,21 @@ function getUserMediaSuccess(stream) {
     initSocket();
 }
 
+function testNetwork () {
+
+}
+
+function mirrorMe () {
+
+}
+
 function initSocket() {
   socket = io('https://' + document.domain + ':' + document.location.port);
   socket.on('connection',function(socket){
     console.log('Socket connected!');
   });
   socket.on('restTURN',function(msg){
-    if ( msg.restTURN != null ) { 
+    if ( msg.restTURN != null ) {
       console.log('received restTURN from server :)');
       restTURN = msg.restTURN;
       peerConnectionConfig.iceServers.push(msg.restTURN);
@@ -102,7 +110,7 @@ function callParticipant(msg) {
     participantList[msg.pid] = {};
     tempPeerConnectionConfig = peerConnectionConfig;
     if ( typeof(msg.restTURN) != 'undefined') {
-      participantList[msg.pid].restTURN=msg.restTURN; 
+      participantList[msg.pid].restTURN=msg.restTURN;
       tempPeerConnectionConfig.iceServers.push(participantList[msg.pid].restTURN);
     }
     participantList[msg.pid].peerConnection = new RTCPeerConnection(tempPeerConnectionConfig);
@@ -134,8 +142,8 @@ function gotIceCandidate(candidate, pid) {
 function createdDescription(description,pid) {
     console.log('created localDescription sending to', pid);
     var msg = {};
-    if ( description.type == 'offer' && typeof restTURN != 'undefined' ) 
-      msg.restTURN = restTURN; // sending my own restTURN along 
+    if ( description.type == 'offer' && typeof restTURN != 'undefined' )
+      msg.restTURN = restTURN; // sending my own restTURN along
     participantList[pid].peerConnection.setLocalDescription(description).then(function() {
 	msg.sdp = participantList[pid].peerConnection.localDescription;
 	msg.pid = pid;
@@ -153,6 +161,9 @@ function addStream( stream, pid ) {
   if ( pid == "localStream" ) {
     video.muted = true;
     videoDiv.style.height = "100%";
+    video.style.cssText = "-moz-transform: scale(-1, 1); \
+      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+      transform: scale(-1, 1); filter: FlipH;";
   } else {
   videoDiv.style.opacity = "0"; // invisible until layout is settled
   }
@@ -222,6 +233,9 @@ function setBigVideo(pid){
   video.autoplay = true;
   if ( pid == "localStream" ) {
     video.muted = true;
+    video.style.cssText = "-moz-transform: scale(-1, 1); \
+      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+      transform: scale(-1, 1); filter: FlipH;";
   }
   videoContainer.style.top = "80%";
   bigVideoContainer.appendChild(video);
@@ -274,7 +288,7 @@ function unHideOpaqueElements(container){
   for(i=0;i < children.length ;i++){
     if ( children[i].style.opacity == '0'  ) { children[i].style.opacity = '1' }
   }
- 
+
 }
 
 // checks if the last videoDiv fits on the screen
@@ -316,8 +330,8 @@ function checkVideoContainer(){
     } else {
         // check if videoContainer was modified before so it should be finished
         // now - so we can redraw it ( because chrome live rendering is not perfect )
-        if ( videoContainerChanged == true ) { 
-          forceRedraw(videoContainer) 
+        if ( videoContainerChanged == true ) {
+          forceRedraw(videoContainer)
         }
         unHideOpaqueElements(videoContainer)
         window.setTimeout(checkVideoContainer, 200 ); // standard recheck timeframe
