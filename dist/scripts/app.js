@@ -6,12 +6,13 @@ var videoContainer,videoContainerChanged,bigVideoContainer;
 var room;
 var dragLastOver,dragSource;
 var hidingElementsStatus = "visible";
+var restTURN;
 
 function pageReady() {
   room = document.URL.split("/")[3];
-  localVideo = document.getElementById('localVideo');
-  videoContainer = document.getElementById('videoContainer');
-  bigVideoContainer = document.getElementById('bigVideoContainer');
+  localVideo = $('#localVideo')[0];
+  videoContainer = $('#videoContainer')[0];
+  bigVideoContainer = $('#bigVideoContainer')[0];
 
   var constraints = {
     audio: true,
@@ -48,10 +49,23 @@ function initSocket() {
   socket.on('connection',function(socket){
     console.log('Socket connected!');
   });
+  socket.on('restTURN',function(msg){
+    if ( msg.restTURN != null ) { 
+      console.log('received restTURN from server :)');
+      restTURN = msg.restTURN;
+      peerConnectionConfig.iceServers.push(msg.restTURN);
+    }
+    else {
+      console.log('received empty restTURN config from server :(');
+    }
+    // inform the server that this client is ready to stream:
+    socket.emit('ready',room);
+  });
   socket.on('sdp',function(msg){
     // Only create answers in response to offers
-    console.log('received sdp from',msg.pid);
+    console.log('received sdp from',msg.pid,msg.restTURN);
     if(msg.sdp.type == 'offer') {
+      if ( typeof msg.restTURN != 'undefined' ) peerConnectionConfig.iceServers.push(msg.restTURN);
       participantList[msg.pid]={};
       participantList[msg.pid].peerConnection = new RTCPeerConnection(peerConnectionConfig)
       participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
@@ -70,7 +84,7 @@ function initSocket() {
   });
   socket.on('participantReady',function(msg){
     console.log('got participantReady:',msg );
-    callParticipant(msg.pid);
+    callParticipant(msg);
   });
   socket.on('bye',function(msg){
     console.log('got bye from:',msg.pid );
@@ -80,25 +94,34 @@ function initSocket() {
     console.log('received participantDied from server: removing participant from my participantList');
     deleteParticipant(msg.pid);
   });
-  // inform the server that this client is ready to stream:
-  socket.emit('ready',room);
+
   window.onunload = function(){socket.emit('bye')};
 }
 
-function callParticipant(pid) {
-    participantList[pid] = {};
-    participantList[pid].peerConnection = new RTCPeerConnection(peerConnectionConfig);
-    participantList[pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
-    participantList[pid].peerConnection.onaddstream = function (event){addStream(event.stream,pid)};
-    participantList[pid].peerConnection.addStream(localStream);
-    participantList[pid].peerConnection.createOffer().then(function (description){createdDescription(description,pid)}).catch(errorHandler);
+function callParticipant(msg) {
+    participantList[msg.pid] = {};
+    tempPeerConnectionConfig = peerConnectionConfig;
+    if ( typeof(msg.restTURN) != 'undefined') {
+      participantList[msg.pid].restTURN=msg.restTURN; 
+      tempPeerConnectionConfig.iceServers.push(participantList[msg.pid].restTURN);
+    }
+    participantList[msg.pid].peerConnection = new RTCPeerConnection(tempPeerConnectionConfig);
+    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
+    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+    participantList[msg.pid].peerConnection.addStream(localStream);
+    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
 }
 
 function deleteParticipant(pid){
-  console.log('removing participant: ',pid)
-  participantList[pid].peerConnection.close();
-  participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
-  delete participantList[pid];
+  if (typeof(participantList[pid]) != 'undefined'){
+    console.log('removing participant: ',pid)
+    participantList[pid].peerConnection.close();
+    participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
+    delete participantList[pid];
+  }
+  else{
+    console.log('removing participant: participant does not exist: ',pid)
+  }
 }
 
 function gotIceCandidate(candidate, pid) {
@@ -110,19 +133,22 @@ function gotIceCandidate(candidate, pid) {
 
 function createdDescription(description,pid) {
     console.log('created localDescription sending to', pid);
-
+    var msg = {};
+    if ( description.type == 'offer' && typeof restTURN != 'undefined' ) 
+      msg.restTURN = restTURN; // sending my own restTURN along 
     participantList[pid].peerConnection.setLocalDescription(description).then(function() {
-        socket.emit('sdp',{ 'sdp': participantList[pid].peerConnection.localDescription, 'pid':pid} );
+	msg.sdp = participantList[pid].peerConnection.localDescription;
+	msg.pid = pid;
+        socket.emit('sdp',msg);
     }).catch(errorHandler);
+    console.log('sending message:',msg);
 }
 
 function addStream( stream, pid ) {
-  videoDiv = document.getElementById("templateVideoDiv").cloneNode(true);
+  videoDiv = $("#templateVideoDiv")[0].cloneNode(true);
   participantList[pid].mediaStream = stream;
   var video = document.createElement('video');
-  var source = document.createElement('source');
-  source.src = window.URL.createObjectURL(stream);
-  video.appendChild(source)
+  video.srcObject = stream;
   video.autoplay = true;
   if ( pid == "localStream" ) {
     video.muted = true;
@@ -192,9 +218,7 @@ function setBigVideo(pid){
     bigVideoContainer.removeChild( bigVideoContainer.getElementsByTagName('video')[0] );
   }
   var video = document.createElement('video');
-  var source = document.createElement('source');
-  source.src = window.URL.createObjectURL(participantList[pid].mediaStream);
-  video.appendChild(source);
+  video.srcObject = participantList[pid].mediaStream;
   video.autoplay = true;
   if ( pid == "localStream" ) {
     video.muted = true;
@@ -378,12 +402,18 @@ function drop(ev) {
     document.getElementById(data).style.opacity = "1";
 }
 function fadeOutElements(pid) {
-  $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
-  participantList[pid].hidingElementsStatus = "hidden"
+	if (typeof pid !== 'undefined') {
+		//console.log(pid);
+		$( "#" + pid + "." + "fadeOutElements").fadeOut();
+		//$(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
+		participantList[pid].hidingElementsStatus = "hidden";
+	}
+	
 }
 
 function fadeInElements(pid) {
-  $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeIn("fast");
+  $( "#" + pid + "." + "fadeOutElements").fadeIn("fast")
+  //$(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeIn("fast");
   participantList[pid].hidingElementsStatus = "visible";
   participantList[pid].fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
 }

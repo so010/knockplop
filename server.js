@@ -21,6 +21,8 @@ app.use(express.static(__dirname + '/bower_components'));
 app.use('/pix',express.static(__dirname + '/pix'));
 app.use('/scripts',express.static(__dirname + '/dist/scripts'));
 app.use('/css',express.static(__dirname + '/dist/css'));
+app.use('/bootstrap',express.static(__dirname + '/dist/bootstrap'));
+app.use('/jquery',express.static(__dirname + '/dist/jquery'));
 app.use('/client-config.js',express.static(__dirname + '/client-config.js'));
 app.get('/', function (req, res) {
    console.log(req.url);
