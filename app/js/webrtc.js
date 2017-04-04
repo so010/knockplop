@@ -400,7 +400,9 @@ function deleteParticipant(pid){
   if (typeof(participantList[pid]) != 'undefined'){
     console.log('removing participant: ',pid)
     participantList[pid].peerConnection.close();
-    participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
+    if ( typeof participantList[pid].videoDiv == 'object' ) { 
+      participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
+    }
     delete participantList[pid];
   }
   else{
@@ -424,7 +426,7 @@ function receivedDescription(msg){
     participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // just receiving mirror stream
+    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
       participantList[msg.pid].peerConnection.addStream(localStream)
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
