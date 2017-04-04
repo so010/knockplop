@@ -178,6 +178,7 @@ var iceServerManager = {
   fastestUdpTurnServer:null, // fastest found TURN server for udp
   fastestTcpTurnServer:null, // fastest found TURN server for tcp
   callbacks:[], // array of callback functions
+  runningTests:{}, // list of running tests
 
   restart : function(callback){
     this.fastestUdpTurnServer = null
@@ -194,7 +195,7 @@ var iceServerManager = {
       this.callbacks.push(callback)
     }
     if ( iceServers.length == 0 ) return
-    var workerCount = 20 // number of max peerconnection to open for testing
+    var workerCount = 8 // number of max peerconnection to open for testing
     //  no STUN-server testing yet so just moving them to iceServers array:    
     for ( var i = 0 ; i < iceServers.length; i++ ) {
       if ( iceServers[i].urls.indexOf('stun') != -1 ) {
@@ -210,6 +211,7 @@ var iceServerManager = {
   },
 
   onTurnServerTested : function(turnServer){
+    delete this.runningTests[turnServer.urls]
     if ( turnServer.status == 'tested' ) { 
       this.iceServers.push(turnServer)
       if ( turnServer.urls.indexOf('udp') != -1 ) {
@@ -229,29 +231,28 @@ var iceServerManager = {
     }
     delete turnServer.rttTester
     console.log ( 'onTurnServerTested: ' + turnServer.urls + ' status: ' + turnServer.status + ' rtt: ' + turnServer.rtt) 
-    // test next Server
-    this.turnServerTest()
-  },
-
-  turnServerTest : function(){
-    console.log('turnServerTest 1 worker started, testQueue: ' + 
-                this.testIceServers.length + ' tested: ' + 
-                this.iceServers.length) 
     if ( this.testIceServers.length == 0 ) {
-      if ( this.callbacks.length == 0 ) {
-        return
-      }
-      else { // call all callbacks
+      if ( Object.keys(this.runningTests).length == 0 ) {
         while ( this.callbacks.length > 0 ) {
           this.callbacks.pop()()
         }
-        return
       }
+    } else { 
+      // test next Server
+      this.turnServerTest()
     }
-    var testIceServer = this.testIceServers.shift()
+  },
+
+  turnServerTest : function(){
+    if ( this.testIceServers.length == 0 ) { return }
+    console.log('turnServerTest 1 worker started, testQueue: ' + 
+                this.testIceServers.length + ' tested: ' + 
+                this.iceServers.length) 
+   var testIceServer = this.testIceServers.shift()
     console.log('turnServerTest: ' + testIceServer.urls) 
     if ( testIceServer.urls.indexOf('turn') != -1 ) { // TURN-servers only
       testIceServer.rttTester = new RttTester(this.onTurnServerTested.bind(this), testIceServer)
+      this.runningTests[testIceServer.urls] = true
     }
     else{ // this should not happen(all STUN servers should be moved before this is executed) but you never know
       this.iceServers.push(testIceServer)
@@ -342,14 +343,17 @@ function initSocket() {
         testIceServers.push(turnServer);
         console.log(turnServer.urls);
       }
-      iceServerManager.startTesting(testIceServers,function(){socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})});
+      iceServerManager.startTesting(testIceServers,function(){
+        var turn = iceServerManager.getFastestTurnServers()
+        socket.emit('ready',{'room':room,'turn':turn})
+        console.log('sending ready to room: turn: ' + turn)
+      });
     }
     else {
       console.log('received empty restTURN config from server :(');
     }
   });
   socket.on('sdp',function(msg){
-    // Only create answers in response to offers
     console.log('received sdp from',msg.pid,msg.turn);
     receivedDescription(msg)
   });
@@ -382,6 +386,9 @@ function callParticipant(msg) {
       participantList[msg.pid].peerConnectionConfig.iceServers = 
         participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
     }
+    if ( msg.pid.indexOf('mirror') != -1 ) {
+      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
+    }
     participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig);
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
@@ -411,6 +418,9 @@ function receivedDescription(msg){
       participantList[msg.pid].peerConnectionConfig.iceServers =
         participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
     }
+    if ( msg.pid.indexOf('mirror') != -1 ) {
+      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
+    }
     participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
@@ -432,7 +442,7 @@ function gotIceCandidate(candidate, pid) {
     if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror 
       socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
     }
-    else{ // candidates from mirroring set we directly ( but only relay candidates ) 
+    else { // candidates from mirroring set we directly ( but only relay candidates ) 
       if ( candidate.candidate.split("typ")[1].split(" ",2 )[1] == 'relay' )  {
         if (pid == 'mirrorReceiver') { pid = 'mirrorSender' }
         else { pid = 'mirrorReceiver' }
