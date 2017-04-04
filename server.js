@@ -32,16 +32,16 @@ app.all('/*', function (req, res) {
    console.log(req.url);
    res.sendFile(__dirname + '/' +'dist/index.html');
 })
-httpsServer.listen(config.HTTPS_PORT, '0.0.0.0');
+httpsServer.listen(config.HTTPS_PORT, '::');
 
 // redirect to https
 httpApp.all('*',function (req, res) {
     res.redirect(301, "https://" + req.hostname + ":" + config.HTTPS_PORT + req.path);
     console.log('HTTP request -> redirecting: ' + "https://" + req.hostname + ":" + config.HTTPS_PORT + req.path);
     res.end();
-}).listen(config.HTTP_PORT);
+}).listen(config.HTTP_PORT,'::');
 
-httpsServer.listen(config.HTTPS_PORT, '0.0.0.0');
+httpsServer.listen(config.HTTPS_PORT, '::');
 
 // ----------------------------------------------------------------------------------------
 
@@ -66,17 +66,18 @@ io.on('connection', function(socket) {
       socket.emit('restTURN',{'restTURN':null});
     }
   });
-  socket.on('ready', function(room) {
-    console.log('new participant: %s in room: %s', socket.id, room);
-    socket.join(room);
+  socket.on('ready', function(msg) {
+    console.log('new participant: %s in room: %s', socket.id, msg.room);
+    socket.join(msg.room);
     socket.ready = true;
-    socket.room = room;
-    socket.broadcast.to(room).emit('participantReady',{'pid':socket.id, 'restTURN':socket.restTURN});
+    socket.room = msg.room;
+    socket.broadcast.to(msg.room).emit('participantReady',{'pid':socket.id, 'turn':msg.turn});
   });
   socket.on('sdp', function(msg) {
     console.log('received sdp from %s type: %s > forward to %s ...',
       socket.id, msg.sdp.type, msg.pid);
-    socket.broadcast.to(msg.pid).emit('sdp',{'sdp':msg.sdp , 'pid':socket.id});
+    io.sockets.in(msg.pid).emit('sdp',{'sdp':msg.sdp , 'pid':socket.id, 'turn':msg.turn});
+//    socket.broadcast.to(msg.pid).emit('sdp',{'sdp':msg.sdp , 'pid':socket.id});
   });
   socket.on('iceCandidate', function(msg) {
     console.log('received iceCandidate: from %s for %s :',
