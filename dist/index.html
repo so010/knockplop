@@ -7,12 +7,20 @@
         <script src="scripts/app.js"></script>
         <script src="jquery/dist/jquery.min.js"></script>
         <script src="bootstrap/dist/js/bootstrap.min.js"></script>
-	<script src="client-config.js"></script>
+        <script src="progressbar.js/dist/progressbar.min.js"></script>
+	      <script src="client-config.js"></script>
 	<link rel="stylesheet" type="text/css" href="css/all.css">
         <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport' />
     </head>
 
     <body>
+      <div id="globalMessage" class="hidden">
+        <div id="globalMessageText">
+          <p id="globalMessageTextField"></p>
+        </div>
+         <div id="globalMessageProgressBar">
+        </div>
+      </div>
       <div id="bigVideoContainer">
         <div class="overlayTopRight fadeOutElements">
           <span class="exitBigVideoIcon material-icons md-light hidden"
@@ -57,6 +65,40 @@
           </span>
         </div>
       </div>
+      <div id="localVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
+        onmousemove="onMouseMoveAction(event.currentTarget.id)">
+        <div class="overlayTopRight fadeOutElements">
+          <span class="videoMuteIcon material-icons md-light hidden"
+            onclick="unMuteVideo(event.target.parentElement.parentElement.id)">
+            videocam_off
+          </span>
+          <span class="videoUnMuteIcon material-icons md-light"
+            onclick="muteVideo(event.target.parentElement.parentElement.id)">
+            videocam
+          </span>
+          <span class="audioMuteIcon material-icons md-light hidden"
+            onclick="unMuteAudio(event.target.parentElement.parentElement.id)">
+            mic_off
+          </span>
+          <span class="audioUnMuteIcon material-icons md-light"
+            onclick="muteAudio(event.target.parentElement.parentElement.id)">
+            mic
+          </span>
+          <span class="bigVideoIcon material-icons md-light"
+            onclick="setBigVideo(event.target.parentElement.parentElement.id)">
+            arrow_drop_up
+          </span>
+        </div>
+        <div class="overlayMiddleCenter">
+          <span id="joinButton" class="hidden">
+            <p> You are about to enter the room</p>
+            <button class="button" type="button" onclick="joinRoom()">
+              Join room
+            </button>
+          </span>
+        </div>
+      </div>
+
       <script type="text/javascript">
         window.onload = pageReady;
       </script>
