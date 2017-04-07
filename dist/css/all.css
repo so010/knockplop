@@ -131,6 +131,60 @@ video {
   border-radius: 7px;
   display: flex; }
 
+.overlayMiddleCenter {
+  z-index: 99;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 4vh;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex;
+  bottom: 10%;
+  left: 50%;
+  transform: translate(-50%, 0%); }
+
+.button {
+  background-color: #4CAF50;
+  border: none;
+  color: white;
+  border-radius: 7px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block; }
+
+#globalMessage {
+  z-index: 100;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(150, 150, 150, 0.4);
+  position: absolute;
+  font-size: 3vh;
+  padding: 4px;
+  border-radius: 7px;
+  display: block;
+  top: 20vh;
+  left: 50%;
+  width: 30%;
+  height: 50%;
+  transform: translate(-50%); }
+
+#globalMessageText {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 4vh;
+  padding: 4px;
+  top: 0px;
+  left: 50%;
+  width: 100%;
+  transform: translate(-50%);
+  position: absolute; }
+
+#globalMessageProgressBar {
+  left: 50%;
+  width: 33%;
+  top: 50%;
+  transform: translate(-50%, -50%); }
+
 #bigVideoContainer {
   width: 100%;
   height: 100vh;

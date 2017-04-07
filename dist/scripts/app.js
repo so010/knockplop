@@ -9,7 +9,7 @@ var dragLastOver,dragSource;
 var hidingElementsStatus = "visible";
 var restTURN;
 var fadeOutTimer;
-
+var progressBar = {}
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
   setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
@@ -19,7 +19,8 @@ function getUserMediaSuccess(stream) {
     localStream = stream;
     participantList["localVideo"] = {};
     addStream( stream, "localVideo" );
-    initSocket();
+    setGlobalMessage('Test remote streaming:')
+    mirrorMe();
 }
 
 function RttTester (callback,turnServer){
@@ -33,13 +34,12 @@ function RttTester (callback,turnServer){
   this.pongTime = 0
   this.pingTimer
   this.watchDogCounter = 0
-  this.watchDogTimeoutStartValue = 1000
+  this.watchDogTimeoutStartValue = 600
   this.watchDogTimeout = this.watchDogTimeoutStartValue
   this.turnServer = turnServer
 
   this.setStatus = function(status){
     this.turnServer.status = status;
-  //  console.log('rttTester: ' + this.turnServer.urls + ' status changed: ' + status) 
     if ( status == 'tested' || status == 'disabled') {
       this.turnServer.rtt = this.rtt
       callback(this.turnServer)
@@ -61,7 +61,6 @@ function RttTester (callback,turnServer){
     if ( e.candidate ) {
       // filter only for the relay candidate:
       if ( e.candidate.candidate.indexOf('relay') !== -1 ) {
-  //      console.log('addIceCandidate to localPC:',e.candidate.candidate,this.turnServer.urls);
         this.localPC.addIceCandidate(e.candidate)
       }
     }
@@ -87,7 +86,7 @@ function RttTester (callback,turnServer){
   }
 
   this.watchDog = function(){
-    if ( this.watchDogCounter >= 2 ) {
+    if ( this.watchDogCounter >= 1 ) {
       this.setStatus("disabled")
       this.localPC.close()
       this.localPC = {}
@@ -121,7 +120,6 @@ function RttTester (callback,turnServer){
     var pingEnd = d.getTime();
     var pingTime = pingEnd - JSON.parse(event.data); 
     this.remoteDataChannel.send(JSON.stringify(pingEnd))
-//    console.log(this.turnServer.urls +': Ping: ' + pingTime + 'ms')
     this.pingTime = (this.pingTime * this.pingCount + pingTime) / ( this.pingCount + 1 ) 
     clearTimeout(this.watchDogTimer)
     this.watchDogTimeout = this.watchDogTimeoutStartValue
@@ -133,15 +131,13 @@ function RttTester (callback,turnServer){
     var d = new Date();
     var pongEnd = d.getTime(); 
     var pongTime = pongEnd - JSON.parse(event.data);
-  //    this.pingTimer = window.setTimeout(this.startPing.bind(this), 200); 
     this.pongTime = ( this.pongTime * this.pingCount + pongTime ) / ( this.pingCount + 1 )
     var rtt = this.pingTime + this.pongTime;
     this.rtt = ( this.rtt * this.pingCount + rtt ) / ( this.pingCount + 1 )
-//    console.log('rttTester: ' + this.turnServer.urls +': received Pong: ' + pongTime + 'ms -> rtt:' + this.rtt + 'ms')
     clearTimeout(this.watchDogTimer)
     this.watchDogTimeout = this.watchDogTimeoutStartValue
     this.watchDogTimer = window.setTimeout(this.watchDog.bind(this), this.watchDogTimeout)
-    if ( this.pingCount < 10 ){
+    if ( this.pingCount < 15 ){
       this.pingCount++
       this.startPing.bind(this)()
     }
@@ -178,6 +174,7 @@ var iceServerManager = {
   fastestUdpTurnServer:null, // fastest found TURN server for udp
   fastestTcpTurnServer:null, // fastest found TURN server for tcp
   callbacks:[], // array of callback functions
+  progressEvent:null, // this will be called for progress info
   runningTests:{}, // list of running tests
 
   restart : function(callback){
@@ -190,12 +187,15 @@ var iceServerManager = {
     this.startTesting(servers,callback)
   },
 
-  startTesting : function(iceServers,callback){ 
+  startTesting : function(iceServers,callback,progressEvent){ 
     if(callback && typeof callback == "function"){
       this.callbacks.push(callback)
     }
+    if(progressEvent && typeof progressEvent == "function"){
+      this.progressEvent = progressEvent
+    }
     if ( iceServers.length == 0 ) return
-    var workerCount = 8 // number of max peerconnection to open for testing
+    var workerCount = 18 // number of max peerconnection to open for testing
     //  no STUN-server testing yet so just moving them to iceServers array:    
     for ( var i = 0 ; i < iceServers.length; i++ ) {
       if ( iceServers[i].urls.indexOf('stun') != -1 ) {
@@ -206,7 +206,7 @@ var iceServerManager = {
     Array.prototype.push.apply(this.testIceServers,iceServers)
     // TURN Server testing: not all at the same time to reduce network issues and Firefox problems with to many PeerConnections
     for ( var i = 1; i <= workerCount; i++ ){
-      this.turnServerTest()
+      setTimeout(this.turnServerTest(),0)
     }
   },
 
@@ -231,8 +231,15 @@ var iceServerManager = {
     }
     delete turnServer.rttTester
     console.log ( 'onTurnServerTested: ' + turnServer.urls + ' status: ' + turnServer.status + ' rtt: ' + turnServer.rtt) 
+    // sending progress info
+    if ( this.progressEvent != null ) { 
+      var progress = ( this.disabledIceServers.length + this.iceServers.length ) / 
+        ( this.testIceServers.length + Object.keys(this.runningTests).length + this.iceServers.length + this.disabledIceServers.length ) 
+      this.progressEvent(progress) 
+    }
+    // call the callbacks if nothing left to test and no tests are still running
     if ( this.testIceServers.length == 0 ) {
-      if ( Object.keys(this.runningTests).length == 0 ) {
+      if ( Object.keys(this.runningTests).length == 0 ) { 
         while ( this.callbacks.length > 0 ) {
           this.callbacks.pop()()
         }
@@ -343,11 +350,11 @@ function initSocket() {
         testIceServers.push(turnServer);
         console.log(turnServer.urls);
       }
+      setGlobalMessage('Testing network conditions')
       iceServerManager.startTesting(testIceServers,function(){
-        var turn = iceServerManager.getFastestTurnServers()
-        socket.emit('ready',{'room':room,'turn':turn})
-        console.log('sending ready to room: turn: ' + turn)
-      });
+        setGlobalMessage('Getting access to your camera and microphone...')
+        getMediaDevices()
+      },progressBarManager.updateProgress.bind(progressBarManager));
     }
     else {
       console.log('received empty restTURN config from server :(');
@@ -423,9 +430,14 @@ function receivedDescription(msg){
     }
     participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // just receiving mirror stream
+    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
+      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
       participantList[msg.pid].peerConnection.addStream(localStream)
+    } else {
+      participantList[msg.pid].peerConnection.onaddstream = function (event){
+        replaceStream(event.stream,'localVideo')
+        document.getElementById("joinButton").classList.remove('hidden')
+      }
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
     participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
@@ -475,19 +487,21 @@ function createdDescription(description,pid) {
 }
 
 function addStream( stream, pid ) {
-  var videoDiv = document.getElementById("templateVideoDiv").cloneNode(true);
+  var videoDiv = {}
   participantList[pid].mediaStream = stream;
   var video = document.createElement('video');
   video.srcObject = stream;
   video.autoplay = true;
   if ( pid == "localVideo" ) {
     video.muted = true;
+    videoDiv = document.getElementById("localVideoDiv")
     videoDiv.style.height = "100%";
     video.style.cssText = "-moz-transform: scale(-1, 1); \
       -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
       transform: scale(-1, 1); filter: FlipH;";
   } else {
-  videoDiv.style.opacity = "0"; // invisible until layout is settled
+    videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
+    videoDiv.style.opacity = "0"; // invisible until layout is settled
   }
   videoDiv.appendChild(video);
   var lastVideoDiv = videoContainer.lastElementChild;
@@ -507,6 +521,11 @@ function addStream( stream, pid ) {
   videoDiv.classList.remove('hidden');
   fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
 }
+
+function replaceStream( stream, pid ) {
+  document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream
+}
+
 
 function forceRedraw (element){
   var disp = element.style.display;
@@ -560,7 +579,7 @@ function setBigVideo(pid){
       -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
       transform: scale(-1, 1); filter: FlipH;";
   }
-  videoContainer.style.top = "80%";
+  videoContainer.style.top = "90%";
   bigVideoContainer.appendChild(video);
   var exitBigVideoIcon = document.getElementById('bigVideoContainer').getElementsByClassName('exitBigVideoIcon')[0];
   exitBigVideoIcon.classList.remove('hidden');
@@ -611,7 +630,6 @@ function unHideOpaqueElements(container){
   for(var i=0;i < children.length ;i++){
     if ( children[i].style.opacity == '0'  ) { children[i].style.opacity = '1' }
   }
-
 }
 
 // checks if the last videoDiv fits on the screen
@@ -768,18 +786,68 @@ function errorHandler(error) {
     console.log(error.code);
 }
 
-function pageReady() {
-  // getting some HTML-elements we need later and roomname:
-  room = document.URL.split("/")[3];
-  localVideo = document.getElementById('localVideo');
-  videoContainer = document.getElementById('videoContainer');
-  bigVideoContainer = document.getElementById('bigVideoContainer');
+function joinRoom(){
+  socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
+  document.getElementById('joinButton').classList.add('hidden')
+  replaceStream(localStream,'localVideo')
+  deleteParticipant('mirrorReceiver')
+  deleteParticipant('mirrorSender')
+}
 
-  // move initially configured ICE servers to testing before we use them
-  if ( typeof(peerConnectionConfig.iceServers) != 'undefined' && peerConnectionConfig.iceServers.length > 0 ) {
-    iceServerManager.startTesting(peerConnectionConfig.iceServers)
-  }
+var progressBarManager = {
+  progressBar:null,
+  init:function(){
+    this.progressBar = new ProgressBar.Circle(globalMessageProgressBar, {
+      color: '#aaa',
+      // This has to be the same size as the maximum width to
+      // prevent clipping
+      strokeWidth: 4,
+      trailWidth: 1,
+      easing: 'easeInOut',
+      duration: 1400,
+      from: { color: '#aaa', width: 1 },
+      to: { color: '#333', width: 4 },
+      duration:200,
+      step: function(state, circle) {
+        circle.path.setAttribute('stroke', state.color);
+        circle.path.setAttribute('stroke-width', state.width);
+        var value = Math.round(circle.value() * 100);
+        if (value === 0) {
+          circle.setText('');
+        } else {
+          circle.setText(value+'%');
+        }
+      }
+    })
+  },
+  updateProgress:function(progress){
+    document.getElementById('globalMessage').classList.remove('hidden')
+    this.progressBar.animate(progress)
+    if ( progress > 0.99999999 ) {
+      fadeOut(document.getElementById('globalMessage'))     
+    }
+  },
+}
 
+function setGlobalMessage(msg){
+//  document.getElementById('globalMessage').classList.remove('hidden')
+  document.getElementById('globalMessageTextField').innerHTML = msg
+}
+
+function fadeOut(element){
+  var op = 1;  // initial opacity
+  var timer = setInterval(function () {
+    if (op <= 0.1){
+      clearInterval(timer);
+      element.classList.add('hidden');
+    }
+    element.style.opacity = op;
+//    element.style.filter = 'alpha(opacity=' + op * 100 + ")";
+    op -= op * 0.1;
+  }, 70);
+}
+
+function getMediaDevices(){
   var constraints = {
     audio: true,
     video: {
@@ -794,6 +862,26 @@ function pageReady() {
   } else {
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
   }
+}
+
+
+function pageReady() {
+  // getting some HTML-elements we need later and roomname:
+  room = document.URL.split("/")[3];
+  localVideo = document.getElementById('localVideo');
+  videoContainer = document.getElementById('videoContainer');
+  bigVideoContainer = document.getElementById('bigVideoContainer');
+  
+  progressBarManager.init()
+
+  // move initially configured ICE servers to testing before we use them
+  setGlobalMessage('Testing connection step 1')
+  if ( typeof(peerConnectionConfig.iceServers) != 'undefined' && peerConnectionConfig.iceServers.length > 0 ) {
+    iceServerManager.startTesting(peerConnectionConfig.iceServers,undefined,
+          progressBarManager.updateProgress.bind(progressBarManager))
+  }
+  setGlobalMessage('Initializing...')
+  initSocket()  
 
   window.addEventListener('resize', redrawVideoContainer);
   window.setTimeout(checkVideoContainer, 2500);
