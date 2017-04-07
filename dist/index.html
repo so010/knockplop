@@ -89,9 +89,12 @@
             arrow_drop_up
           </span>
         </div>
-        <div class="overlayMiddleCenter">
+        <div id="localTopLeft" class="overlayTopLeft">
+        </div>
+        <div id="localMessage" class="overlayMiddleCenter">
           <span id="joinButton" class="hidden">
             <p> You are about to enter the room</p>
+            <span id="audioIndicator" class="material-icons md-light">mic</span>
             <button class="button" type="button" onclick="joinRoom()">
               Join room
             </button>
