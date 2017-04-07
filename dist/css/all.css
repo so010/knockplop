@@ -88,7 +88,7 @@ video {
   top: 2px;
   background-color: rgba(100, 100, 100, 0.3);
   position: absolute;
-  font-size: 3em;
+  font-size: 4.5vh;
   vertical-align: middle;
   padding: 4px;
   border-radius: 7px;
@@ -96,12 +96,12 @@ video {
   cursor: pointer; }
 
 .overlayTopLeft {
+  z-index: 99;
   top: 2px;
   left: 2px;
   color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
   position: absolute;
-  font-size: 3.5vh;
+  font-size: 4.5vh;
   vertical-align: middle;
   padding: 4px;
   border-radius: 7px;
@@ -113,7 +113,7 @@ video {
   color: rgba(255, 255, 255, 0.8);
   background-color: rgba(150, 150, 150, 0.4);
   position: absolute;
-  font-size: 3.5vh;
+  font-size: 4.5vh;
   vertical-align: middle;
   padding: 4px;
   border-radius: 7px;
@@ -136,7 +136,7 @@ video {
   color: rgba(255, 255, 255, 0.8);
   background-color: rgba(150, 150, 150, 0.4);
   position: absolute;
-  font-size: 4vh;
+  font-size: 4.5vh;
   vertical-align: middle;
   padding: 4px;
   border-radius: 7px;

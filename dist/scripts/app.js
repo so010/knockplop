@@ -20,7 +20,8 @@ function getUserMediaSuccess(stream) {
     participantList["localVideo"] = {};
     addStream( stream, "localVideo" );
     setGlobalMessage('Test remote streaming:')
-    mirrorMe();
+    mirrorMe()
+    audioAnalyser(stream)
 }
 
 function RttTester (callback,turnServer){
@@ -786,12 +787,14 @@ function toggleStickyness(pid) {
 
 
 function errorHandler(error) {
-    console.log(error.code);
+    console.log(error);
 }
 
 function joinRoom(){
   socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
   document.getElementById('joinButton').classList.add('hidden')
+  document.getElementById('localMessage').classList.add('hidden')
+  document.getElementById('localTopLeft').appendChild(document.getElementById('audioIndicator'))
   replaceStream(localStream,'localVideo')
   deleteParticipant('mirrorReceiver')
   deleteParticipant('mirrorSender')
@@ -849,6 +852,57 @@ function fadeOut(element){
     op -= op * 0.1;
   }, 70);
 }
+
+function audioAnalyser(stream) {
+  var audioContext = new AudioContext()
+  var analyser = audioContext.createAnalyser()
+  var microphone = audioContext.createMediaStreamSource(stream)
+  var javascriptNode = audioContext.createScriptProcessor(2048, 1, 1)
+
+  analyser.smoothingTimeConstant = 0
+  analyser.fftSize = 1024
+
+  microphone.connect(analyser)
+  analyser.connect(javascriptNode)
+  javascriptNode.connect(audioContext.destination)
+  var maxAudioLvl = 0
+  var oldAudioLvl = 0
+  var speakerDetected = false
+
+  javascriptNode.onaudioprocess = function() {
+    var array = new Uint8Array(analyser.frequencyBinCount)
+    analyser.getByteFrequencyData(array)
+    var values = 0
+    var length = array.length;
+    for (var i = 0; i < length; i++) {
+      values += (array[i]*array[i]);
+    }
+
+    var average = Math.sqrt(values / length);
+    maxAudioLvl = Math.max(maxAudioLvl,average);
+    average = Math.max( average, oldAudioLvl-oldAudioLvl*0.1);
+    oldAudioLvl = average;
+    var averagePercent = average / maxAudioLvl
+    var audioIndicator = document.getElementById('audioIndicator')
+    audioIndicator.style.opacity = averagePercent
+    if ( averagePercent > 0.15 ) { 
+      if ( averagePercent > 0.8 ) { 
+        audioIndicator.style.color = 'red' 
+      } 
+      else { 
+        audioIndicator.style.color = 'yellow' 
+        speakerDetected = true 
+      }
+    } 
+    else { 
+      audioIndicator.style.color = null
+      speakerDetected = false 
+    }
+    console.log(averagePercent, speakerDetected);
+
+  } 
+}
+
 
 function getMediaDevices(){
   var constraints = {
