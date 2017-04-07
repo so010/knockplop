@@ -898,8 +898,6 @@ function audioAnalyser(stream) {
       audioIndicator.style.color = null
       speakerDetected = false 
     }
-    console.log(averagePercent, speakerDetected);
-
   } 
 }
 
