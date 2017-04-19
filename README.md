@@ -40,7 +40,7 @@ Start the server:
 node server.js
 ```
 
-With the server running, open a recent version of Firefox or Chrome and visit `http://yourHostName:8080
+With the server running, open a recent version of Firefox or Chrome and visit `https://yourHostName:8080
 
 
 ### Development
