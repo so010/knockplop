@@ -92,6 +92,10 @@ io.on('connection', function(socket) {
     console.log('client disconnected: %s in room: ', socket.id, socket.room );
     socket.broadcast.to(socket.room).emit('participantDied',{ 'pid':socket.id } );
   });
+  socket.on('magnetURI', function(msg) {
+    console.log('client disconnected: %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(socket.room).emit('magnetURI',{'pid':socket.id,'magnetURI':msg} );
+  })
 
 });
 

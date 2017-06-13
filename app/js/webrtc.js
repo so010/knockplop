@@ -10,18 +10,27 @@ var hidingElementsStatus = "visible";
 var restTURN;
 var fadeOutTimer;
 var progressBar = {}
+var webtorrentClient = {}
+var dragDrop = {}
+
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
   setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
 }
+function getScreenSuccess (stream) {
+  stream.type = 'screen'
+  participantList["localVideo"].screenStream = stream
 
-function getUserMediaSuccess(stream) {
-    localStream = stream;
-    participantList["localVideo"] = {};
-    addStream( stream, "localVideo" );
-    setGlobalMessage('Test remote streaming:')
-    mirrorMe()
-    audioAnalyser(stream)
+}
+
+function getCamSuccess(stream) {
+  stream.type = 'camera'
+  localStream = stream;
+  participantList["localVideo"] = {};
+  addStream( stream, "localVideo" );
+  setGlobalMessage('Test remote streaming:')
+  mirrorMe()
+  audioAnalyser(stream)
 }
 
 function RttTester (callback,turnServer){
@@ -35,7 +44,7 @@ function RttTester (callback,turnServer){
   this.pongTime = 0
   this.pingTimer
   this.watchDogCounter = 0
-  this.watchDogTimeoutStartValue = 600
+  this.watchDogTimeoutStartValue = 2600
   this.watchDogTimeout = this.watchDogTimeoutStartValue
   this.turnServer = turnServer
 
@@ -311,6 +320,7 @@ var iceServerManager = {
     if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
     // and the fastest tcp TURN server:
     if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
+    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
     return servers
   },
 
@@ -322,6 +332,7 @@ var iceServerManager = {
     if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
     // and the fastest tcp TURN server:
     if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
+    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
     return servers
   },
 }
@@ -354,7 +365,7 @@ function initSocket() {
       setGlobalMessage('Testing network conditions')
       iceServerManager.startTesting(testIceServers,function(){
         setGlobalMessage('Getting access to your camera and microphone...')
-        getMediaDevices()
+        getCam()
       },progressBarManager.updateProgress.bind(progressBarManager));
     }
     else {
@@ -381,7 +392,28 @@ function initSocket() {
     console.log('received participantDied from server: removing participant from my participantList');
     deleteParticipant(msg.pid);
   });
-
+  socket.on('magnetURI',function(msg){
+    participantList[msg.pid].progressBar._container.classList.remove('hidden')
+    participantList[msg.pid].progressBar.set(0)
+    webtorrentClient.add(msg.magnetURI,function(torrent) {
+      torrent.on('done', function () {
+        participantList[msg.pid].progressBar._container.classList.add('hidden')
+        console.log('torrent download finished from ',msg.pid,' ',torrent.files[0].name)
+        torrent.files[0].getBlobURL(function callback (err, url) {
+          if (err) console.log('Error on getting torrent-file: ',torrent.files[0].name)
+          var a = document.createElement('a')
+          a.download = torrent.files[0].name
+          a.href = url
+          a.textContent = 'Download ' + torrent.files[0].name
+          document.body.appendChild(a)
+        }.bind(msg))
+      }.bind(msg))
+      torrent.on('download',function (bytes) {
+        participantList[msg.pid].progressBar.set(torrent.progress)
+        console.log('torrent progress: ',torrent.progress,torrent.files[0].name,msg.pid)
+      }.bind(msg))
+    }.bind(msg))
+  })
   window.onunload = function(){socket.emit('bye')};
 }
 
@@ -490,6 +522,9 @@ function createdDescription(description,pid) {
   }).catch(errorHandler)
 }
 
+
+// this is about creating a video view for participant and 
+// adding and activating video
 function addStream( stream, pid ) {
   var videoDiv = {}
   participantList[pid].mediaStream = stream;
@@ -498,7 +533,7 @@ function addStream( stream, pid ) {
   video.autoplay = true;
   if ( pid == "localVideo" ) {
     video.muted = true;
-    videoDiv = document.getElementById("localVideoDiv")
+    videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
     videoDiv.style.height = "100%";
     video.style.cssText = "-moz-transform: scale(-1, 1); \
       -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
@@ -508,6 +543,41 @@ function addStream( stream, pid ) {
     videoDiv.style.opacity = "0"; // invisible until layout is settled
   }
   videoDiv.appendChild(video);
+  var progressBarDiv = document.createElement('div')
+  progressBarDiv.classList.add('overlayBottom','hidden')
+  var progressBar = new ProgressBar.Line(progressBarDiv, {
+    strokeWidth: 5,
+    easing: 'easeInOut',
+    duration: 100,
+    color: '#FFEA82',
+    trailColor: '#eee',
+    trailWidth: 1,
+    svgStyle: {width: '85%'},
+    text: {
+      style: {
+        // Text color.
+        // Default: same as stroke color (options.color)
+        color: '#fff',
+        position: 'absolute',
+//        display:'block',
+        right: '0px',
+//        bottom: '0px',
+        width:'15%',
+        padding: '2px',
+        margin: '2px',
+        top: '50%',
+        transform: 'translate(0,-50%)',
+      },
+      autoStyleContainer: false
+    },
+    from: {color: '#FFEA82'},
+    to: {color: '#ED6A5A'},
+    step: (state, bar) => {
+      bar.setText(Math.round(bar.value() * 100) + ' %')
+    }
+  })
+  participantList[pid].progressBar = progressBar
+  videoDiv.appendChild(progressBarDiv)
   var lastVideoDiv = videoContainer.lastElementChild;
   videoContainer.appendChild(videoDiv);
   videoDiv.addEventListener("drop",drop);
@@ -810,7 +880,6 @@ var progressBarManager = {
       strokeWidth: 4,
       trailWidth: 1,
       easing: 'easeInOut',
-      duration: 1400,
       from: { color: '#aaa', width: 1 },
       to: { color: '#333', width: 4 },
       duration:200,
@@ -885,7 +954,7 @@ function audioAnalyser(stream) {
     var averagePercent = average / maxAudioLvl
     var audioIndicator = document.getElementById('audioIndicator')
     audioIndicator.style.opacity = averagePercent
-    if ( averagePercent > 0.15 ) { 
+    if ( averagePercent > 0.25 ) { 
       if ( averagePercent > 0.8 ) { 
         audioIndicator.style.color = 'red' 
       } 
@@ -901,8 +970,22 @@ function audioAnalyser(stream) {
   } 
 }
 
+function getScreen(){
+  var constraints = {
+    audio: false,
+    video: { mediaSource: "screen" }
+  };
 
-function getMediaDevices(){
+  // get camera and mic:
+  if(navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+  } else {
+      alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+  }
+}
+
+
+function getCam(){
   var constraints = {
     audio: true,
     video: {
@@ -913,12 +996,11 @@ function getMediaDevices(){
 
   // get camera and mic:
   if(navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(constraints).then(getUserMediaSuccess).catch(errorHandler);
+      navigator.mediaDevices.getUserMedia(constraints).then(getCamSuccess).catch(errorHandler);
   } else {
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
   }
 }
-
 
 function pageReady() {
   // getting some HTML-elements we need later and roomname:
@@ -926,6 +1008,20 @@ function pageReady() {
   localVideo = document.getElementById('localVideo');
   videoContainer = document.getElementById('videoContainer');
   bigVideoContainer = document.getElementById('bigVideoContainer');
+  webtorrentClient = new WebTorrent({
+    tracker: {
+      rtcConfig: peerConnectionConfig
+    }
+  })
+  dragDrop = new DragDrop('#videoDivWrapper', function (files, pos) {
+    console.log('Here are the dropped files', files)
+    console.log('Dropped at coordinates', pos.x, pos.y)
+    webtorrentClient.seed(files, function (torrent) {
+      console.log('Client is seeding ' + torrent.magnetURI)
+      socket.emit('magnetURI',torrent.magnetURI)
+    })
+  })
+
   
   progressBarManager.init()
 

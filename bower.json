@@ -4,7 +4,9 @@
   "dependencies": {
     "material-design-icons": "~2.2.3",
     "bootstrap": "~3.3.6",
-    "progressbar.js": "~1.0.1"
+    "progressbar.js": "~1.0.1",
+    "webtorrent": "~0.98.15",
+    "drag-drop": "~2.13.2"
   },
   "private": true
 }
