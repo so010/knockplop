@@ -10,9 +10,9 @@ var restTURN;
 
 function pageReady() {
   room = document.URL.split("/")[3];
-  localVideo = $('#localVideo')[0];
-  videoContainer = $('#videoContainer')[0];
-  bigVideoContainer = $('#bigVideoContainer')[0];
+  localVideo = document.getElementById('localVideo');
+  videoContainer = document.getElementById('videoContainer');
+  bigVideoContainer = document.getElementById('bigVideoContainer');
 
   var constraints = {
     audio: true,
@@ -145,7 +145,7 @@ function createdDescription(description,pid) {
 }
 
 function addStream( stream, pid ) {
-  videoDiv = $("#templateVideoDiv")[0].cloneNode(true);
+  videoDiv = document.getElementById("templateVideoDiv").cloneNode(true);
   participantList[pid].mediaStream = stream;
   var video = document.createElement('video');
   video.srcObject = stream;
@@ -402,18 +402,12 @@ function drop(ev) {
     document.getElementById(data).style.opacity = "1";
 }
 function fadeOutElements(pid) {
-	if (typeof pid !== 'undefined') {
-		//console.log(pid);
-		$( "#" + pid + "." + "fadeOutElements").fadeOut();
-		//$(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
-		participantList[pid].hidingElementsStatus = "hidden";
-	}
-	
+  $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
+  participantList[pid].hidingElementsStatus = "hidden"
 }
 
 function fadeInElements(pid) {
-  $( "#" + pid + "." + "fadeOutElements").fadeIn("fast")
-  //$(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeIn("fast");
+  $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeIn("fast");
   participantList[pid].hidingElementsStatus = "visible";
   participantList[pid].fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
 }
