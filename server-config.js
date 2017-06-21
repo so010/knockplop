@@ -2,8 +2,8 @@ var config = module.exports = {}
 var fs = require('fs');
 
 config.httpsConfig = {
-    key: fs.readFileSync('/etc/ssl/private/keyfile.key'),
-    cert: fs.readFileSync('/etc/ssl/private/certfile.pem')
+    key: fs.readFileSync('cert/keyfile.key'),
+    cert: fs.readFileSync('cert/certfile.cert')
 //    ,ca: fs.readFileSync('/etc/ssl/private/CAfile.pem')
 };
 config.HTTP_PORT = 80;

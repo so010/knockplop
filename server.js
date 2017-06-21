@@ -19,7 +19,7 @@ var stunrestanswer;
 
 
 // app.use(express.static(__dirname + '/dist'));
-app.use(express.static(__dirname + '/bower_components'));
+app.use(express.static(__dirname + '/node_modules'));
 app.use('/pix',express.static(__dirname + '/pix'));
 app.use('/scripts',express.static(__dirname + '/dist/scripts'));
 app.use('/css',express.static(__dirname + '/dist/css'));

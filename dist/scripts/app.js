@@ -8,6 +8,28 @@ var dragLastOver,dragSource;
 var hidingElementsStatus = "visible";
 var restTURN;
 
+
+
+
+
+  var localConnection;
+var remoteConnection;
+var sendChannel;
+var receiveChannel;
+var pcConstraint;
+var dataConstraint;
+
+
+var dataChannelSend = document.querySelector('textarea#dataChannelSend');
+var dataChannelReceive = document.querySelector('textarea#dataChannelReceive');
+var startButton = document.querySelector('button#startButton');
+var sendButton = document.querySelector('button#sendButton');
+var closeButton = document.querySelector('button#closeButton');
+
+
+var kpsendChannel;
+
+
 function pageReady() {
   room = document.URL.split("/")[3];
   localVideo = document.getElementById('localVideo');
@@ -30,6 +52,23 @@ function pageReady() {
   window.addEventListener('resize', redrawVideoContainer);
   window.setTimeout(checkVideoContainer, 2500);
   fadeOutTimer = window.setTimeout(fadeOutElements, [3000]);
+  
+  
+  /****************
+  chat
+  */
+
+	dataChannelSend = document.querySelector('textarea#dataChannelSend');
+	dataChannelReceive = document.querySelector('textarea#dataChannelReceive');
+	startButton = document.querySelector('button#startButton');
+	sendButton = document.querySelector('button#sendButton');
+	closeButton = document.querySelector('button#closeButton');
+
+	//startButton.onclick = createConnection;
+	//sendButton.onclick = sendData;
+	//closeButton.onclick = closeDataChannels;
+
+  
 }
 
 function redrawVideoContainer () {
@@ -62,6 +101,7 @@ function initSocket() {
     socket.emit('ready',room);
   });
   socket.on('sdp',function(msg){
+	//alert(JSON.stringify(msg));
     // Only create answers in response to offers
     console.log('received sdp from',msg.pid,msg.restTURN);
     if(msg.sdp.type == 'offer') {
@@ -72,7 +112,28 @@ function initSocket() {
       participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
       participantList[msg.pid].peerConnection.addStream(localStream)
       participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-      participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+      
+	  var newsendChannel = participantList[msg.pid].peerConnection.createDataChannel('nsendDataChannel', {});
+	  //alert (JSON.stringify(newsendChannel));
+		newsendChannel.onmessage = function (event) {
+			alert("Server: " + event.data);
+		};
+
+		newsendChannel.onopen = function () {
+			//alert("channel open");
+			newsendChannel.send("Hello Server!");
+		};
+		
+		newsendChannel.ondatachannel = function () {
+			alert("test ondatachannel");
+		};
+		
+		newsendChannel.onerror = function(){alert("DC ERROR!!!")};
+		
+		
+		participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+	  
+
     }
     else if (msg.sdp.type == 'answer') {
       participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
@@ -109,7 +170,25 @@ function callParticipant(msg) {
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
     participantList[msg.pid].peerConnection.addStream(localStream);
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    
+	var newpsendChannel = participantList[msg.pid].peerConnection.createDataChannel('nsendDataChannel', {});
+	  //alert (newpsendChannel);
+		newpsendChannel.onmessage = function (event) {
+			alert("Server: " + event.data);
+		};
+
+		newpsendChannel.onopen = function () {
+			//alert("channel open");
+			newpsendChannel.send("Hello Server!");
+		};
+		
+		newpsendChannel.ondatachannel = function () {
+			alert("test ondatachannel");
+		};
+		
+	participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+	
+
 }
 
 function deleteParticipant(pid){
@@ -402,8 +481,8 @@ function drop(ev) {
     document.getElementById(data).style.opacity = "1";
 }
 function fadeOutElements(pid) {
-  $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
-  participantList[pid].hidingElementsStatus = "hidden"
+  //$(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
+  //participantList[pid].hidingElementsStatus = "hidden"
 }
 
 function fadeInElements(pid) {

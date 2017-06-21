@@ -7,12 +7,20 @@
         <script src="scripts/app.js"></script>
         <script src="jquery/dist/jquery.min.js"></script>
         <script src="bootstrap/dist/js/bootstrap.min.js"></script>
+		<!-- <script src="js/data_ch.js"></script>-->
 	<script src="client-config.js"></script>
 	<link rel="stylesheet" type="text/css" href="css/all.css">
         <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport' />
     </head>
 
     <body>
+		 <div id="chatabc">
+			<textarea id="dataChannelReceive" ></textarea><br>
+			<input type="text" id="dataChannelSend" placeholder="enter some text, then press Send.">
+			<button value="send" id="sendButton">Send</button>
+			<button id="startButton">Start</button>
+			<button id="closeButton">Close</button>
+		</div>
       <div id="bigVideoContainer">
         <div class="overlayTopRight fadeOutElements">
           <span class="exitBigVideoIcon material-icons md-light hidden"
