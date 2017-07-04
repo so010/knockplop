@@ -2,3 +2,5 @@ node_modules
 *.pem
 config.js
 *.swp
+bower_components
+*-config.js
