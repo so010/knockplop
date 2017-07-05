@@ -19,18 +19,26 @@ function redrawVideoContainer () {
 }
 function getScreenSuccess (stream) {
   stream.type = 'screen'
+  localStream = stream;
   participantList["localVideo"].screenStream = stream
-
+  // TODO set this stream in the peerconnection
+  document.querySelector('video').srcObject = stream;
 }
 
 function getCamSuccess(stream) {
   stream.type = 'camera'
   localStream = stream;
-  participantList["localVideo"] = {};
-  addStream( stream, "localVideo" );
-  setGlobalMessage('Test remote streaming:')
-  mirrorMe()
-  audioAnalyser(stream)
+  if (participantList["localVideo"]) {
+    // TODO set this stream in the peerconnection
+    delete participantList["localVideo"].screenStream;
+    document.querySelector('video').srcObject = stream;
+  } else {
+    participantList["localVideo"] = {};
+    addStream( stream, "localVideo" );
+    setGlobalMessage('Test remote streaming:')
+    mirrorMe()
+    audioAnalyser(stream)
+  }
 }
 
 function RttTester (callback,turnServer){
@@ -268,8 +276,12 @@ var iceServerManager = {
    var testIceServer = this.testIceServers.shift()
     console.log('turnServerTest: ' + testIceServer.urls) 
     if ( testIceServer.urls.indexOf('turn') != -1 ) { // TURN-servers only
+      /*
+        LINO bypassing turn server rtt testing
       testIceServer.rttTester = new RttTester(this.onTurnServerTested.bind(this), testIceServer)
       this.runningTests[testIceServer.urls] = true
+      */
+      this.onTurnServerTested(testIceServer)
     }
     else{ // this should not happen(all STUN servers should be moved before this is executed) but you never know
       this.iceServers.push(testIceServer)
@@ -350,6 +362,11 @@ function initSocket() {
     console.log('Socket connected!');
   });
   socket.on('restTURN',function(msg){
+    // LINO TEST
+    if ( msg.restTURN == null ) {
+        msg.restTURN = {'username': 'i2cat', 'credential': 'i2catdev', 'urls': ['turn:webrtcatdev.i2cat.net:5349']}
+    }
+    // LINO TEST
     if ( msg.restTURN != null ) {
       console.log('received restTURN from server :)');
       var restTURN = msg.restTURN;
@@ -429,6 +446,25 @@ function callParticipant(msg) {
     if ( msg.pid.indexOf('mirror') != -1 ) {
       participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
     }
+
+    // LINO TEST
+    var config =
+    {
+        iceServers:
+        [
+         {
+            "urls":"turn:webrtcatdev.i2cat.net:5349",
+            "username":"i2cat",
+            "credential":"i2catdev"
+         },
+         {
+            urls: ["stun:webrtcatdev.i2cat.net:3478"]
+         }
+        ]
+    }
+    participantList[msg.pid].peerConnectionConfig = config;
+    // LINO TEST
+
     participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig);
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
@@ -463,6 +499,25 @@ function receivedDescription(msg){
     if ( msg.pid.indexOf('mirror') != -1 ) {
       participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
     }
+
+    // LINO TEST
+    var config =
+    {
+        iceServers:
+        [
+         {
+            "urls":"turn:webrtcatdev.i2cat.net:5349",
+            "username":"i2cat",
+            "credential":"i2catdev"
+         },
+         {
+            urls: ["stun:webrtcatdev.i2cat.net:3478"]
+         }
+        ]
+    }
+    participantList[msg.pid].peerConnectionConfig = config;
+    // LINO TEST
+
     participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
     if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
@@ -699,6 +754,16 @@ function toggleFullScreen() {
   }
 }
 
+// LINO
+var screensharing = false;
+
+function toggleScreenshare() {
+    screensharing = !screensharing;
+    document.getElementById('screenshareIcon').innerHTML = screensharing ? 'stop_screen_share' : 'screen_share';
+    screensharing ? getScreen() : getCam();
+}
+// LINO
+
 function unHideOpaqueElements(container){
   var children = container.children
   for(var i=0;i < children.length ;i++){
@@ -841,7 +906,7 @@ function fadeInElements(pid) {
 }
 
 function onMouseMoveAction(pid) {
-  console.log(pid);
+  // console.log(pid);
   if ( participantList[pid].hidingElementsStatus === "hidden" ) {
     fadeInElements(pid);
   }
