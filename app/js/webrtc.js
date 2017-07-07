@@ -12,12 +12,20 @@ var fadeOutTimer;
 var progressBar = {}
 var webtorrentClient = {}
 var dragDrop = {}
+var screensharing = false;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
   setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
 }
+
+function setIsScreensharing(isScreensharing) {
+  screensharing = isScreensharing;
+  document.getElementById('screenshareIcon').innerHTML = screensharing ? 'stop_screen_share' : 'screen_share';
+}
+
 function getScreenSuccess (stream) {
+  setIsScreensharing(true);
   stream.type = 'screen'
   var prevLocalStream = localStream;
   localStream = stream;
@@ -27,6 +35,7 @@ function getScreenSuccess (stream) {
 }
 
 function getCamSuccess(stream) {
+  setIsScreensharing(false);
   stream.type = 'camera'
   var prevLocalStream = localStream;
   localStream = stream;
@@ -53,6 +62,7 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
         pc.removeStream(oldStream);
       }
 
+      // TODO use addTrack instead of addStream?
       // pc.addTrack(stream.getVideoTracks()[0], stream);
       pc.addStream(newStream);
     }
@@ -60,7 +70,8 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
 }
 
 function handleRenegotiation() {
-  console.log("*** LINO handleRenegotiation() called!");
+  console.log("handleRenegotiation() called!");
+  // Go through the list of participants and send each one a new SDP.
   for (var pid in participantList) {
     if (pid != "localVideo") {
       var pc = participantList[pid].peerConnection;
@@ -69,7 +80,7 @@ function handleRenegotiation() {
       }).then(function() {
         // Send this new offer to this participant.
         sendSDP(pc.localDescription, pid);
-      });
+      }).catch(errorHandler);
     }
   }
 }
@@ -309,12 +320,8 @@ var iceServerManager = {
    var testIceServer = this.testIceServers.shift()
     console.log('turnServerTest: ' + testIceServer.urls) 
     if ( testIceServer.urls.indexOf('turn') != -1 ) { // TURN-servers only
-      /*
-        LINO bypassing turn server rtt testing
       testIceServer.rttTester = new RttTester(this.onTurnServerTested.bind(this), testIceServer)
       this.runningTests[testIceServer.urls] = true
-      */
-      this.onTurnServerTested(testIceServer)
     }
     else{ // this should not happen(all STUN servers should be moved before this is executed) but you never know
       this.iceServers.push(testIceServer)
@@ -356,19 +363,6 @@ var iceServerManager = {
 // this returns one UDP-TURN, one TCP-TURN and one STUN server []
 // , returned TURN servers are the ones with fastest measured round trip time
   getFastestIceServers : function() {
-    // LINO TEST
-    return [
-         {
-            "urls":"turn:webrtcatdev.i2cat.net:5349",
-            "username":"i2cat",
-            "credential":"i2catdev"
-         },
-         {
-            "urls": ["stun:webrtcatdev.i2cat.net:3478"]
-         }
-    ];
-    // LINO TEST
-    /*
     var servers = []
     // get one stunserver:
     var i = 0
@@ -380,7 +374,6 @@ var iceServerManager = {
     if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
     if ( servers.length == 0 ) servers.push(this.disabledIceServers)
     return servers
-    */
   },
 
 // this returns one UDP-TURN and one TCP-TURN server [], no STUN Server here included
@@ -409,11 +402,6 @@ function initSocket() {
     console.log('Socket connected!');
   });
   socket.on('restTURN',function(msg){
-    // LINO TEST
-    if ( msg.restTURN == null ) {
-        msg.restTURN = {'username': 'i2cat', 'credential': 'i2catdev', 'urls': ['turn:webrtcatdev.i2cat.net:5349']}
-    }
-    // LINO TEST
     if ( msg.restTURN != null ) {
       console.log('received restTURN from server :)');
       var restTURN = msg.restTURN;
@@ -482,8 +470,10 @@ function initSocket() {
 }
 
 function createPeerConnection(pid,turn) {
+    console.log("Creating PeerConnection for pid: " + pid);
     var peerConnectionConfig = {}
     peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+
     /*
     if ( typeof(msg.turn) != 'undefined') {
       participantList[pid].turn=turn;
@@ -491,6 +481,7 @@ function createPeerConnection(pid,turn) {
         participantList[pid].turn.concat(peerConnectionConfig.iceServers)
     }
     */
+
     if ( pid.indexOf('mirror') != -1 ) {
       peerConnectionConfig.iceTransportPolicy = 'relay'
     }
@@ -503,7 +494,7 @@ function createPeerConnection(pid,turn) {
 }
 
 function callParticipant(msg) {
-    console.log("*** LINO callParticipant: " + msg.pid);
+    console.log("callParticipant with pid: " + msg.pid);
     participantList[msg.pid] = {};
 /*
     var peerConnectionConfig = {}
@@ -522,7 +513,6 @@ function callParticipant(msg) {
     participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
     participantList[msg.pid].peerConnection.onnegotiationneeded = handleRenegotiation;
 */
-    console.log("*** LINO creating peer connection");
     participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
 
     participantList[msg.pid].peerConnection.addStream(localStream);
@@ -531,9 +521,8 @@ function callParticipant(msg) {
 }
 
 function receivedDescription(msg){
-
   if(msg.sdp.type == 'offer') {
-    console.log("*** LINO received OFFER Description: " + msg.pid);
+    console.log("OFFER SDP received from pid: " + msg.pid);
     /*
     participantList[msg.pid].peerConnectionConfig = {}
     participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
@@ -560,8 +549,8 @@ function receivedDescription(msg){
     }
     */
 
+    // Create a PeerConnection object only if we don't already have one for this pid.
     if (participantList[msg.pid] == undefined) {
-      console.log("*** LINO creating peer connection on answer");
       participantList[msg.pid]={};
       participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn); 
       if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
@@ -579,10 +568,9 @@ function receivedDescription(msg){
     participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
   }
   else if (msg.sdp.type == 'answer') {
-    console.log("*** LINO received ANSWER Description: " + msg.pid);
+    console.log("Received ANSWER SDP from pid: " + msg.pid);
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
   }
-
 }
 
 function deleteParticipant(pid){
@@ -644,7 +632,6 @@ function createdDescription(description,pid) {
     */
 }
 
-// LINO addition
 function sendSDP(sdp, pid) {
   console.log('Sending SDP to', pid);
   var msg = {};
@@ -664,7 +651,6 @@ function sendSDP(sdp, pid) {
     receivedDescription(msg)
   }
 }
-// LINO addition
 
 // this is about creating a video view for participant and 
 // adding and activating video
@@ -672,7 +658,8 @@ function addStream( stream, pid ) {
   console.log("*** addStream() called for pid: " + pid);
   var videoDiv = document.getElementById(pid);
   if (videoDiv) {
-    videoDiv.getElementsByTagName("video")[0].srcObject = stream;
+    // Video element already exists for this pid, so just replace the source with the given stream.
+    replaceStream(stream, pid) 
   } else {
       var videoDiv = {}
       participantList[pid].mediaStream = stream;
@@ -707,9 +694,9 @@ function addStream( stream, pid ) {
             // Default: same as stroke color (options.color)
             color: '#fff',
             position: 'absolute',
-    //        display:'block',
+            // display:'block',
             right: '0px',
-    //        bottom: '0px',
+            // bottom: '0px',
             width:'15%',
             padding: '2px',
             margin: '2px',
@@ -748,7 +735,6 @@ function addStream( stream, pid ) {
 function replaceStream( stream, pid ) {
   document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream
 }
-
 
 function forceRedraw (element){
   var disp = element.style.display;
@@ -848,15 +834,16 @@ function toggleFullScreen() {
   }
 }
 
-// LINO
-var screensharing = false;
 
 function toggleScreenshare() {
-    screensharing = !screensharing;
-    document.getElementById('screenshareIcon').innerHTML = screensharing ? 'stop_screen_share' : 'screen_share';
-    screensharing ? getScreen() : getCam();
+  if (!screensharing) {
+    // Currently using the camera, so switch to the screen.
+    getScreen();
+  } else {
+    // Currently sharing the screen, so switch to camera.
+    getCam();
+  }
 }
-// LINO
 
 function unHideOpaqueElements(container){
   var children = container.children
@@ -1013,10 +1000,8 @@ function toggleStickyness(pid) {
   $("#stickyButton").toggleClass("black");
 }
 
-
-
 function errorHandler(error) {
-    console.log(error);
+    console.error(error);
 }
 
 function joinRoom(){
@@ -1142,7 +1127,6 @@ function getScreen(){
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
   }
 }
-
 
 function getCam(){
   var constraints = {

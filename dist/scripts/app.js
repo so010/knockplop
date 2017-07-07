@@ -12,25 +12,77 @@ var fadeOutTimer;
 var progressBar = {}
 var webtorrentClient = {}
 var dragDrop = {}
+var screensharing = false;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
   setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
 }
-function getScreenSuccess (stream) {
-  stream.type = 'screen'
-  participantList["localVideo"].screenStream = stream
 
+function setIsScreensharing(isScreensharing) {
+  screensharing = isScreensharing;
+  document.getElementById('screenshareIcon').innerHTML = screensharing ? 'stop_screen_share' : 'screen_share';
+}
+
+function getScreenSuccess (stream) {
+  setIsScreensharing(true);
+  stream.type = 'screen'
+  var prevLocalStream = localStream;
+  localStream = stream;
+  participantList["localVideo"].screenStream = stream
+  document.querySelector('video').srcObject = stream;
+  changeStreamsInPeerConnections(prevLocalStream, stream);
 }
 
 function getCamSuccess(stream) {
+  setIsScreensharing(false);
   stream.type = 'camera'
+  var prevLocalStream = localStream;
   localStream = stream;
-  participantList["localVideo"] = {};
-  addStream( stream, "localVideo" );
-  setGlobalMessage('Test remote streaming:')
-  mirrorMe()
-  audioAnalyser(stream)
+  if (participantList["localVideo"]) {
+    delete participantList["localVideo"].screenStream;
+    document.querySelector('video').srcObject = stream;
+    changeStreamsInPeerConnections(prevLocalStream, stream);
+  } else {
+    participantList["localVideo"] = {};
+    addStream( stream, "localVideo" );
+    setGlobalMessage('Test remote streaming:')
+    mirrorMe()
+    audioAnalyser(stream)
+  }
+}
+
+function changeStreamsInPeerConnections(oldStream, newStream) {
+  for (var pid in participantList) {
+    if (pid != "localVideo") {
+      var pc = participantList[pid].peerConnection;
+      if ("removeTrack" in pc) {
+        pc.removeTrack(pc.getSenders()[0]);
+      } else {
+        pc.removeStream(oldStream);
+      }
+
+      // TODO use addTrack instead of addStream?
+      // pc.addTrack(stream.getVideoTracks()[0], stream);
+      pc.addStream(newStream);
+    }
+  }
+}
+
+function handleRenegotiation() {
+  console.log("handleRenegotiation() called!");
+  // Go through the list of participants and send each one a new SDP.
+  for (var pid in participantList) {
+    if (pid != "localVideo") {
+      var pc = participantList[pid].peerConnection;
+      pc.createOffer().then(function(offer) {
+        return pc.setLocalDescription(offer);
+      }).then(function() {
+        // Send this new offer to this participant.
+        sendSDP(pc.localDescription, pid);
+      }).catch(errorHandler);
+    }
+  }
 }
 
 function RttTester (callback,turnServer){
@@ -377,7 +429,7 @@ function initSocket() {
     receivedDescription(msg)
   });
   socket.on('iceCandidate',function(msg){
-    console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
+    // console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
     participantList[msg.pid].peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(errorHandler);
   });
   socket.on('participantReady',function(msg){
@@ -417,23 +469,108 @@ function initSocket() {
   window.onunload = function(){socket.emit('bye')};
 }
 
+function createPeerConnection(pid,turn) {
+    console.log("Creating PeerConnection for pid: " + pid);
+    var peerConnectionConfig = {}
+    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+
+    /*
+    if ( typeof(msg.turn) != 'undefined') {
+      participantList[pid].turn=turn;
+      peerConnectionConfig.iceServers = 
+        participantList[pid].turn.concat(peerConnectionConfig.iceServers)
+    }
+    */
+
+    if ( pid.indexOf('mirror') != -1 ) {
+      peerConnectionConfig.iceTransportPolicy = 'relay'
+    }
+
+    var pc = new RTCPeerConnection(peerConnectionConfig);
+    pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
+    pc.onaddstream = function (event){addStream(event.stream,pid)};
+    pc.onnegotiationneeded = handleRenegotiation;
+    return pc;
+}
+
 function callParticipant(msg) {
+    console.log("callParticipant with pid: " + msg.pid);
     participantList[msg.pid] = {};
-    participantList[msg.pid].peerConnectionConfig = {}
-    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+/*
+    var peerConnectionConfig = {}
+    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
     if ( typeof(msg.turn) != 'undefined') {
       participantList[msg.pid].turn=msg.turn;
-      participantList[msg.pid].peerConnectionConfig.iceServers = 
+      peerConnectionConfig.iceServers = 
+        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
+    }
+    if ( msg.pid.indexOf('mirror') != -1 ) {
+      peerConnectionConfig.iceTransportPolicy = 'relay'
+    }
+
+    participantList[msg.pid].peerConnection = new RTCPeerConnection(peerConnectionConfig);
+    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
+    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+    participantList[msg.pid].peerConnection.onnegotiationneeded = handleRenegotiation;
+*/
+    participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
+
+    participantList[msg.pid].peerConnection.addStream(localStream);
+    // Create offer for target pid and then send through signalling.
+    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+}
+
+function receivedDescription(msg){
+  if(msg.sdp.type == 'offer') {
+    console.log("OFFER SDP received from pid: " + msg.pid);
+    /*
+    participantList[msg.pid].peerConnectionConfig = {}
+    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+    if ( typeof(msg.turn) != 'undefined' ) {
+      participantList[msg.pid].turn = msg.turn;
+      participantList[msg.pid].peerConnectionConfig.iceServers =
         participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
     }
     if ( msg.pid.indexOf('mirror') != -1 ) {
       participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
     }
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig);
+
+    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
     participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-    participantList[msg.pid].peerConnection.addStream(localStream);
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
+      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+      participantList[msg.pid].peerConnection.addStream(localStream)
+    } else {
+      // TODO: this is a ugly hack and should be handled somewhere else:
+      participantList[msg.pid].peerConnection.onaddstream = function (event){
+        replaceStream(event.stream,'localVideo')
+        document.getElementById("joinButton").classList.remove('hidden')
+      }
+    }
+    */
+
+    // Create a PeerConnection object only if we don't already have one for this pid.
+    if (participantList[msg.pid] == undefined) {
+      participantList[msg.pid]={};
+      participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn); 
+      if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
+        participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+        participantList[msg.pid].peerConnection.addStream(localStream)
+      } else {
+        // TODO: this is a ugly hack and should be handled somewhere else:
+        participantList[msg.pid].peerConnection.onaddstream = function (event){
+          replaceStream(event.stream,'localVideo')
+          document.getElementById("joinButton").classList.remove('hidden')
+        }
+      }
+    }
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+  }
+  else if (msg.sdp.type == 'answer') {
+    console.log("Received ANSWER SDP from pid: " + msg.pid);
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+  }
 }
 
 function deleteParticipant(pid){
@@ -450,43 +587,9 @@ function deleteParticipant(pid){
   }
 }
 
-function receivedDescription(msg){
-  if(msg.sdp.type == 'offer') {
-    participantList[msg.pid]={};
-    participantList[msg.pid].peerConnectionConfig = {}
-    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
-    if ( typeof(msg.turn) != 'undefined' ) {
-      participantList[msg.pid].turn = msg.turn;
-      participantList[msg.pid].peerConnectionConfig.iceServers =
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
-    }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
-      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-      participantList[msg.pid].peerConnection.addStream(localStream)
-    } else {
-      // TODO: this is a ugly hack and should be handled somewhere else:
-      participantList[msg.pid].peerConnection.onaddstream = function (event){
-        replaceStream(event.stream,'localVideo')
-        document.getElementById("joinButton").classList.remove('hidden')
-      }
-    }
-    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
-  }
-  else if (msg.sdp.type == 'answer') {
-    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-  }
-
-}
-
 function gotIceCandidate(candidate, pid) {
   if(candidate != null) {
-    console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
+    // console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
     if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror 
       socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
     }
@@ -501,6 +604,12 @@ function gotIceCandidate(candidate, pid) {
 }
 
 function createdDescription(description,pid) {
+  console.log('created localDescription sending to', pid);
+  participantList[pid].peerConnection.setLocalDescription(description).then(function() {
+    sendSDP(participantList[pid].peerConnection.localDescription, pid);
+  }).catch(errorHandler)
+
+    /*
   console.log('created localDescription sending to', pid);
   var msg = {};
   if ( description.type == 'offer' ){
@@ -520,86 +629,112 @@ function createdDescription(description,pid) {
       receivedDescription(msg)
     }
   }).catch(errorHandler)
+    */
 }
 
+function sendSDP(sdp, pid) {
+  console.log('Sending SDP to', pid);
+  var msg = {};
+  if ( sdp.type == 'offer' ){
+    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
+  }
+  msg.sdp = sdp
+  msg.pid = pid
+  // mirroring description are not sent via signalling server but managed locally:
+  if ( pid.indexOf('mirror') == -1 ){ 
+    socket.emit('sdp',msg)
+    console.log('sending message:',msg)
+  } else {
+     // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
+    if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
+    else { msg.pid = 'mirrorReceiver' } 
+    receivedDescription(msg)
+  }
+}
 
 // this is about creating a video view for participant and 
 // adding and activating video
 function addStream( stream, pid ) {
-  var videoDiv = {}
-  participantList[pid].mediaStream = stream;
-  var video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  if ( pid == "localVideo" ) {
-    video.muted = true;
-    videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
-    videoDiv.style.height = "100%";
-    video.style.cssText = "-moz-transform: scale(-1, 1); \
-      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
-      transform: scale(-1, 1); filter: FlipH;";
+  console.log("*** addStream() called for pid: " + pid);
+  var videoDiv = document.getElementById(pid);
+  if (videoDiv) {
+    // Video element already exists for this pid, so just replace the source with the given stream.
+    replaceStream(stream, pid) 
   } else {
-    videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
-    videoDiv.style.opacity = "0"; // invisible until layout is settled
+      var videoDiv = {}
+      participantList[pid].mediaStream = stream;
+      var video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      if ( pid == "localVideo" ) {
+        video.muted = true;
+        videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
+        videoDiv.style.height = "100%";
+        video.style.cssText = "-moz-transform: scale(-1, 1); \
+          -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+          transform: scale(-1, 1); filter: FlipH;";
+      } else {
+        videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
+        videoDiv.style.opacity = "0"; // invisible until layout is settled
+      }
+      videoDiv.appendChild(video);
+      var progressBarDiv = document.createElement('div')
+      progressBarDiv.classList.add('overlayBottom','hidden')
+      var progressBar = new ProgressBar.Line(progressBarDiv, {
+        strokeWidth: 5,
+        easing: 'easeInOut',
+        duration: 100,
+        color: '#FFEA82',
+        trailColor: '#eee',
+        trailWidth: 1,
+        svgStyle: {width: '85%'},
+        text: {
+          style: {
+            // Text color.
+            // Default: same as stroke color (options.color)
+            color: '#fff',
+            position: 'absolute',
+            // display:'block',
+            right: '0px',
+            // bottom: '0px',
+            width:'15%',
+            padding: '2px',
+            margin: '2px',
+            top: '50%',
+            transform: 'translate(0,-50%)',
+          },
+          autoStyleContainer: false
+        },
+        from: {color: '#FFEA82'},
+        to: {color: '#ED6A5A'},
+        step: (state, bar) => {
+          bar.setText(Math.round(bar.value() * 100) + ' %')
+        }
+      })
+      participantList[pid].progressBar = progressBar
+      videoDiv.appendChild(progressBarDiv)
+      var lastVideoDiv = videoContainer.lastElementChild;
+      videoContainer.appendChild(videoDiv);
+      videoDiv.addEventListener("drop",drop);
+      videoDiv.addEventListener("dragstart",dragStart);
+      videoDiv.addEventListener("dragover",allowDrop);
+      videoDiv.addEventListener("dragend", dragEnd);
+      videoDiv.addEventListener("dragleave", dragLeave);
+      videoDiv.addEventListener("dragenter", dragEnter);
+      videoDiv.draggable="true";
+      videoDiv.id = pid;
+      participantList[pid].videoDiv = videoDiv;
+      if ( lastVideoDiv ) {
+        videoDiv.style.height =  lastVideoDiv.style.height;
+      }
+      videoDiv.classList.remove('hidden');
+      fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
   }
-  videoDiv.appendChild(video);
-  var progressBarDiv = document.createElement('div')
-  progressBarDiv.classList.add('overlayBottom','hidden')
-  var progressBar = new ProgressBar.Line(progressBarDiv, {
-    strokeWidth: 5,
-    easing: 'easeInOut',
-    duration: 100,
-    color: '#FFEA82',
-    trailColor: '#eee',
-    trailWidth: 1,
-    svgStyle: {width: '85%'},
-    text: {
-      style: {
-        // Text color.
-        // Default: same as stroke color (options.color)
-        color: '#fff',
-        position: 'absolute',
-//        display:'block',
-        right: '0px',
-//        bottom: '0px',
-        width:'15%',
-        padding: '2px',
-        margin: '2px',
-        top: '50%',
-        transform: 'translate(0,-50%)',
-      },
-      autoStyleContainer: false
-    },
-    from: {color: '#FFEA82'},
-    to: {color: '#ED6A5A'},
-    step: (state, bar) => {
-      bar.setText(Math.round(bar.value() * 100) + ' %')
-    }
-  })
-  participantList[pid].progressBar = progressBar
-  videoDiv.appendChild(progressBarDiv)
-  var lastVideoDiv = videoContainer.lastElementChild;
-  videoContainer.appendChild(videoDiv);
-  videoDiv.addEventListener("drop",drop);
-  videoDiv.addEventListener("dragstart",dragStart);
-  videoDiv.addEventListener("dragover",allowDrop);
-  videoDiv.addEventListener("dragend", dragEnd);
-  videoDiv.addEventListener("dragleave", dragLeave);
-  videoDiv.addEventListener("dragenter", dragEnter);
-  videoDiv.draggable="true";
-  videoDiv.id = pid;
-  participantList[pid].videoDiv = videoDiv;
-  if ( lastVideoDiv ) {
-    videoDiv.style.height =  lastVideoDiv.style.height;
-  }
-  videoDiv.classList.remove('hidden');
-  fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
 }
 
 function replaceStream( stream, pid ) {
   document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream
 }
-
 
 function forceRedraw (element){
   var disp = element.style.display;
@@ -696,6 +831,17 @@ function toggleFullScreen() {
       fullscreenIcon.classList.remove('hidden');
       exitFullscreenIcon.classList.add('hidden');
     }
+  }
+}
+
+
+function toggleScreenshare() {
+  if (!screensharing) {
+    // Currently using the camera, so switch to the screen.
+    getScreen();
+  } else {
+    // Currently sharing the screen, so switch to camera.
+    getCam();
   }
 }
 
@@ -841,7 +987,7 @@ function fadeInElements(pid) {
 }
 
 function onMouseMoveAction(pid) {
-  console.log(pid);
+  // console.log(pid);
   if ( participantList[pid].hidingElementsStatus === "hidden" ) {
     fadeInElements(pid);
   }
@@ -854,10 +1000,8 @@ function toggleStickyness(pid) {
   $("#stickyButton").toggleClass("black");
 }
 
-
-
 function errorHandler(error) {
-    console.log(error);
+    console.error(error);
 }
 
 function joinRoom(){
@@ -983,7 +1127,6 @@ function getScreen(){
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
   }
 }
-
 
 function getCam(){
   var constraints = {
