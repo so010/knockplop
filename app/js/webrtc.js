@@ -749,11 +749,18 @@ function getScreen(){
     video: { mediaSource: "screen" }
   };
 
-  // get camera and mic:
-  if(navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+  if(adapter.browserDetails.browser === 'chrome') {
+    // Chrome 34+ requires an extension
+    var pending = window.setTimeout(function () {
+      alert('The required Chrome extension is not installed.');
+    }, 1000);
+    window.postMessage({ type: 'janusGetScreen', id: pending }, '*');
   } else {
+    if(navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+    } else {
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+    }
   }
 }
 
@@ -811,3 +818,38 @@ function pageReady() {
 }
 
 
+if(adapter.browserDetails.browser === 'chrome') {
+  // Listen for events from the Chrome extension used for screensharing.
+  // Code from Janus project (Copyright (c) 2016 Meetecho)
+  window.addEventListener('message', function (event) {
+    if(event.origin != window.location.origin)
+      return;
+    if (event.data.type == 'janusGotScreen') {
+      if (event.data.sourceId === '') {
+        // user canceled
+        console.log('You cancelled the request for permission, giving up...');
+      } else {
+        var constraints = {
+          audio: false,             // Chrome currently does not support retrieving the microphone with the screen
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              maxWidth: window.screen.width,
+              maxHeight: window.screen.height,
+              maxFrameRate: 3
+            },
+            optional: [
+              {googTemporalLayeredScreencast: true}
+            ]
+          }
+        };
+
+        constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
+        // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
+        navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+      }
+    } else if (event.data.type == 'janusGetScreenPending') {
+        window.clearTimeout(event.data.id);
+    }
+  });
+}
