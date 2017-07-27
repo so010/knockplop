@@ -192,25 +192,7 @@ function createPeerConnection(pid,turn) {
 function callParticipant(msg) {
     console.log("callParticipant with pid: " + msg.pid);
     participantList[msg.pid] = {};
-/*
-    var peerConnectionConfig = {}
-    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
-    if ( typeof(msg.turn) != 'undefined') {
-      participantList[msg.pid].turn=msg.turn;
-      peerConnectionConfig.iceServers = 
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
-    }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
-
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(peerConnectionConfig);
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-    participantList[msg.pid].peerConnection.onnegotiationneeded = handleRenegotiation;
-*/
     participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
-
     participantList[msg.pid].peerConnection.addStream(localStream);
     // Create offer for target pid and then send through signalling.
     participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
@@ -219,32 +201,6 @@ function callParticipant(msg) {
 function receivedDescription(msg){
   if(msg.sdp.type == 'offer') {
     console.log("OFFER SDP received from pid: " + msg.pid);
-    /*
-    participantList[msg.pid].peerConnectionConfig = {}
-    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
-    if ( typeof(msg.turn) != 'undefined' ) {
-      participantList[msg.pid].turn = msg.turn;
-      participantList[msg.pid].peerConnectionConfig.iceServers =
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
-    }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
-
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
-      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-      participantList[msg.pid].peerConnection.addStream(localStream)
-    } else {
-      // TODO: this is a ugly hack and should be handled somewhere else:
-      participantList[msg.pid].peerConnection.onaddstream = function (event){
-        replaceStream(event.stream,'localVideo')
-        document.getElementById("joinButton").classList.remove('hidden')
-      }
-    }
-    */
-
     // Create a PeerConnection object only if we don't already have one for this pid.
     if (participantList[msg.pid] == undefined) {
       participantList[msg.pid]={};
@@ -304,28 +260,6 @@ function createdDescription(description,pid) {
   participantList[pid].peerConnection.setLocalDescription(description).then(function() {
     sendSDP(participantList[pid].peerConnection.localDescription, pid);
   }).catch(errorHandler)
-
-    /*
-  console.log('created localDescription sending to', pid);
-  var msg = {};
-  if ( description.type == 'offer' ){
-    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
-  }
-  participantList[pid].peerConnection.setLocalDescription(description).then(function() {
-	  msg.sdp = participantList[pid].peerConnection.localDescription
-	  msg.pid = pid
-    // mirroring description are not sent via signalling server but managed locally:
-    if ( pid.indexOf('mirror') == -1 ){ 
-      socket.emit('sdp',msg)
-      console.log('sending message:',msg)
-    } else {
-       // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
-      if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
-      else { msg.pid = 'mirrorReceiver' } 
-      receivedDescription(msg)
-    }
-  }).catch(errorHandler)
-    */
 }
 
 function sendSDP(sdp, pid) {
@@ -811,7 +745,7 @@ function audioAnalyser(stream) {
 
 function getScreen(){
   var constraints = {
-    audio: false,
+    audio: true,
     video: { mediaSource: "screen" }
   };
 
