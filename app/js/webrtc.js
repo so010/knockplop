@@ -34,6 +34,21 @@ function getScreenSuccess (stream) {
   changeStreamsInPeerConnections(prevLocalStream, stream);
 }
 
+function getChromeScreenSuccess(screenStream) {
+  // Chrome (as of 59) doesn't allow the microphone to be retrieved when requesting screen sharing, so the workaround
+  // (as described in https://stackoverflow.com/a/20063211) is to request the microphone separately, and then add its audio track to the screen stream.
+  var audioOnlyConstraints = {
+    audio: true,
+    video: false
+  }
+  console.debug("Chrome: attempting to retrieve local microphone for screensharing");
+  navigator.mediaDevices.getUserMedia(audioOnlyConstraints).then(function(audioStream) {
+    screenStream.addTrack(audioStream.getAudioTracks()[0]);
+    console.log("Chrome: using screen stream with audio track");
+    getScreenSuccess(screenStream);
+  }).catch(errorHandler);  
+}
+
 function getCamSuccess(stream) {
   setIsScreensharing(false);
   stream.type = 'camera'
@@ -604,6 +619,7 @@ function drop(ev) {
     document.getElementById(data).getElementsByTagName("video")[0].play();
     document.getElementById(data).style.opacity = "1";
 }
+
 function fadeOutElements(pid) {
   $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
   participantList[pid].hidingElementsStatus = "hidden"
@@ -752,7 +768,7 @@ function getScreen(){
   if(adapter.browserDetails.browser === 'chrome') {
     // Chrome 34+ requires an extension
     var pending = window.setTimeout(function () {
-      alert('The required Chrome extension is not installed.');
+      alert('The required Chrome extension is not installed. To install it, go to https://chrome.google.com/webstore/detail/janus-webrtc-screensharin/hapfgfdkleiggjjpfpenajgdnfckjpaj (you might have to reload the page afterwards).');
     }, 1000);
     window.postMessage({ type: 'janusGetScreen', id: pending }, '*');
   } else {
@@ -818,7 +834,7 @@ function pageReady() {
 }
 
 
-if(adapter.browserDetails.browser === 'chrome') {
+if (adapter.browserDetails.browser === 'chrome') {
   // Listen for events from the Chrome extension used for screensharing.
   // Code from Janus project (Copyright (c) 2016 Meetecho)
   window.addEventListener('message', function (event) {
@@ -846,7 +862,7 @@ if(adapter.browserDetails.browser === 'chrome') {
 
         constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
         // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
-        navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+        navigator.mediaDevices.getUserMedia(constraints).then(getChromeScreenSuccess).catch(errorHandler);
       }
     } else if (event.data.type == 'janusGetScreenPending') {
         window.clearTimeout(event.data.id);
