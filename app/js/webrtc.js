@@ -13,6 +13,7 @@ var progressBar = {}
 var webtorrentClient = {}
 var dragDrop = {}
 var screensharing = false;
+var renegotiationNeeded = false;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -70,6 +71,9 @@ function getCamSuccess(stream) {
 function changeStreamsInPeerConnections(oldStream, newStream) {
   for (var pid in participantList) {
     if (pid != "localVideo") {
+      // Changing streams of a connected peer connection will trigger SDP renegotiation.
+      renegotiationNeeded = true;
+
       var pc = participantList[pid].peerConnection;
       if ("removeTrack" in pc) {
         pc.removeTrack(pc.getSenders()[0]);
@@ -85,7 +89,13 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
 }
 
 function handleRenegotiation() {
-  console.log("handleRenegotiation() called!");
+  if (!renegotiationNeeded) {
+    return;
+  }
+  // TODO The onnegotiationneeded callback seems to be called multiple times in Chrome, but only once (per addStream call?) in FF.
+  // Not sure if this is a Chrome bug, or just stems from not fully understanding when this event is fired, but this results in multiple offer SDPs 
+  // and multiple answer SDPs being received, causing "harmless" error messages in the console. Screen sharing still seems to work though.
+  console.debug("handleRenegotiation() called!");
   // Go through the list of participants and send each one a new SDP.
   for (var pid in participantList) {
     if (pid != "localVideo") {
@@ -210,7 +220,7 @@ function callParticipant(msg) {
     participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
     participantList[msg.pid].peerConnection.addStream(localStream);
     // Create offer for target pid and then send through signalling.
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid,true)}).catch(errorHandler);
 }
 
 function receivedDescription(msg){
@@ -232,11 +242,11 @@ function receivedDescription(msg){
       }
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
   }
   else if (msg.sdp.type == 'answer') {
     console.log("Received ANSWER SDP from pid: " + msg.pid);
-    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(errorHandler);
   }
 }
 
@@ -270,8 +280,8 @@ function gotIceCandidate(candidate, pid) {
   }
 }
 
-function createdDescription(description,pid) {
-  console.log('created localDescription sending to', pid);
+function createdDescription(description,pid,isOffer) {
+  console.log('Setting local ' + (isOffer ? 'OFFER' : 'ANSWER') + ' SDP and sending to ' + pid);
   participantList[pid].peerConnection.setLocalDescription(description).then(function() {
     sendSDP(participantList[pid].peerConnection.localDescription, pid);
   }).catch(errorHandler)
@@ -300,7 +310,7 @@ function sendSDP(sdp, pid) {
 // this is about creating a video view for participant and 
 // adding and activating video
 function addStream( stream, pid ) {
-  console.log("*** addStream() called for pid: " + pid);
+  console.debug("*** addStream() called for pid: " + pid);
   var videoDiv = document.getElementById(pid);
   if (videoDiv) {
     // Video element already exists for this pid, so just replace the source with the given stream.

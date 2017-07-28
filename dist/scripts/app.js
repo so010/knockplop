@@ -134,7 +134,7 @@ var iceServerManager = {
 // this returns one UDP-TURN, one TCP-TURN and one STUN server []
 // , returned TURN servers are the ones with fastest measured round trip time
   getFastestIceServers : function() {
-    var servers = []
+   var servers = []
     // get one stunserver:
     var i = 0
     while ( ( this.iceServers[i].urls.indexOf('stun') == -1 ) && ( i < this.iceServers.length - 1 ) ) { i++ }
@@ -321,6 +321,7 @@ var progressBar = {}
 var webtorrentClient = {}
 var dragDrop = {}
 var screensharing = false;
+var renegotiationNeeded = false;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -340,6 +341,21 @@ function getScreenSuccess (stream) {
   participantList["localVideo"].screenStream = stream
   document.querySelector('video').srcObject = stream;
   changeStreamsInPeerConnections(prevLocalStream, stream);
+}
+
+function getChromeScreenSuccess(screenStream) {
+  // Chrome (as of 59) doesn't allow the microphone to be retrieved when requesting screen sharing, so the workaround
+  // (as described in https://stackoverflow.com/a/20063211) is to request the microphone separately, and then add its audio track to the screen stream.
+  var audioOnlyConstraints = {
+    audio: true,
+    video: false
+  }
+  console.debug("Chrome: attempting to retrieve local microphone for screensharing");
+  navigator.mediaDevices.getUserMedia(audioOnlyConstraints).then(function(audioStream) {
+    screenStream.addTrack(audioStream.getAudioTracks()[0]);
+    console.log("Chrome: using screen stream with audio track");
+    getScreenSuccess(screenStream);
+  }).catch(errorHandler);  
 }
 
 function getCamSuccess(stream) {
@@ -363,6 +379,9 @@ function getCamSuccess(stream) {
 function changeStreamsInPeerConnections(oldStream, newStream) {
   for (var pid in participantList) {
     if (pid != "localVideo") {
+      // Changing streams of a connected peer connection will trigger SDP renegotiation.
+      renegotiationNeeded = true;
+
       var pc = participantList[pid].peerConnection;
       if ("removeTrack" in pc) {
         pc.removeTrack(pc.getSenders()[0]);
@@ -378,7 +397,13 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
 }
 
 function handleRenegotiation() {
-  console.log("handleRenegotiation() called!");
+  if (!renegotiationNeeded) {
+    return;
+  }
+  // TODO The onnegotiationneeded callback seems to be called multiple times in Chrome, but only once (per addStream call?) in FF.
+  // Not sure if this is a Chrome bug, or just stems from not fully understanding when this event is fired, but this results in multiple offer SDPs 
+  // and multiple answer SDPs being received, causing "harmless" error messages in the console. Screen sharing still seems to work though.
+  console.debug("handleRenegotiation() called!");
   // Go through the list of participants and send each one a new SDP.
   for (var pid in participantList) {
     if (pid != "localVideo") {
@@ -500,59 +525,15 @@ function createPeerConnection(pid,turn) {
 function callParticipant(msg) {
     console.log("callParticipant with pid: " + msg.pid);
     participantList[msg.pid] = {};
-/*
-    var peerConnectionConfig = {}
-    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
-    if ( typeof(msg.turn) != 'undefined') {
-      participantList[msg.pid].turn=msg.turn;
-      peerConnectionConfig.iceServers = 
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
-    }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
-
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(peerConnectionConfig);
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-    participantList[msg.pid].peerConnection.onnegotiationneeded = handleRenegotiation;
-*/
     participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
-
     participantList[msg.pid].peerConnection.addStream(localStream);
     // Create offer for target pid and then send through signalling.
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid,true)}).catch(errorHandler);
 }
 
 function receivedDescription(msg){
   if(msg.sdp.type == 'offer') {
     console.log("OFFER SDP received from pid: " + msg.pid);
-    /*
-    participantList[msg.pid].peerConnectionConfig = {}
-    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
-    if ( typeof(msg.turn) != 'undefined' ) {
-      participantList[msg.pid].turn = msg.turn;
-      participantList[msg.pid].peerConnectionConfig.iceServers =
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
-    }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
-
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
-      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-      participantList[msg.pid].peerConnection.addStream(localStream)
-    } else {
-      // TODO: this is a ugly hack and should be handled somewhere else:
-      participantList[msg.pid].peerConnection.onaddstream = function (event){
-        replaceStream(event.stream,'localVideo')
-        document.getElementById("joinButton").classList.remove('hidden')
-      }
-    }
-    */
-
     // Create a PeerConnection object only if we don't already have one for this pid.
     if (participantList[msg.pid] == undefined) {
       participantList[msg.pid]={};
@@ -569,11 +550,11 @@ function receivedDescription(msg){
       }
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
   }
   else if (msg.sdp.type == 'answer') {
     console.log("Received ANSWER SDP from pid: " + msg.pid);
-    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(errorHandler);
   }
 }
 
@@ -607,33 +588,11 @@ function gotIceCandidate(candidate, pid) {
   }
 }
 
-function createdDescription(description,pid) {
-  console.log('created localDescription sending to', pid);
+function createdDescription(description,pid,isOffer) {
+  console.log('Setting local ' + (isOffer ? 'OFFER' : 'ANSWER') + ' SDP and sending to ' + pid);
   participantList[pid].peerConnection.setLocalDescription(description).then(function() {
     sendSDP(participantList[pid].peerConnection.localDescription, pid);
   }).catch(errorHandler)
-
-    /*
-  console.log('created localDescription sending to', pid);
-  var msg = {};
-  if ( description.type == 'offer' ){
-    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
-  }
-  participantList[pid].peerConnection.setLocalDescription(description).then(function() {
-	  msg.sdp = participantList[pid].peerConnection.localDescription
-	  msg.pid = pid
-    // mirroring description are not sent via signalling server but managed locally:
-    if ( pid.indexOf('mirror') == -1 ){ 
-      socket.emit('sdp',msg)
-      console.log('sending message:',msg)
-    } else {
-       // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
-      if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
-      else { msg.pid = 'mirrorReceiver' } 
-      receivedDescription(msg)
-    }
-  }).catch(errorHandler)
-    */
 }
 
 function sendSDP(sdp, pid) {
@@ -659,7 +618,7 @@ function sendSDP(sdp, pid) {
 // this is about creating a video view for participant and 
 // adding and activating video
 function addStream( stream, pid ) {
-  console.log("*** addStream() called for pid: " + pid);
+  console.debug("*** addStream() called for pid: " + pid);
   var videoDiv = document.getElementById(pid);
   if (videoDiv) {
     // Video element already exists for this pid, so just replace the source with the given stream.
@@ -978,6 +937,7 @@ function drop(ev) {
     document.getElementById(data).getElementsByTagName("video")[0].play();
     document.getElementById(data).style.opacity = "1";
 }
+
 function fadeOutElements(pid) {
   $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
   participantList[pid].hidingElementsStatus = "hidden"
@@ -1119,15 +1079,22 @@ function audioAnalyser(stream) {
 
 function getScreen(){
   var constraints = {
-    audio: false,
+    audio: true,
     video: { mediaSource: "screen" }
   };
 
-  // get camera and mic:
-  if(navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+  if(adapter.browserDetails.browser === 'chrome') {
+    // Chrome 34+ requires an extension
+    var pending = window.setTimeout(function () {
+      alert('The required Chrome extension is not installed. To install it, go to https://chrome.google.com/webstore/detail/janus-webrtc-screensharin/hapfgfdkleiggjjpfpenajgdnfckjpaj (you might have to reload the page afterwards).');
+    }, 1000);
+    window.postMessage({ type: 'janusGetScreen', id: pending }, '*');
   } else {
+    if(navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+    } else {
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+    }
   }
 }
 
@@ -1185,3 +1152,38 @@ function pageReady() {
 }
 
 
+if (adapter.browserDetails.browser === 'chrome') {
+  // Listen for events from the Chrome extension used for screensharing.
+  // Code from Janus project (Copyright (c) 2016 Meetecho)
+  window.addEventListener('message', function (event) {
+    if(event.origin != window.location.origin)
+      return;
+    if (event.data.type == 'janusGotScreen') {
+      if (event.data.sourceId === '') {
+        // user canceled
+        console.log('You cancelled the request for permission, giving up...');
+      } else {
+        var constraints = {
+          audio: false,             // Chrome currently does not support retrieving the microphone with the screen
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              maxWidth: window.screen.width,
+              maxHeight: window.screen.height,
+              maxFrameRate: 3
+            },
+            optional: [
+              {googTemporalLayeredScreencast: true}
+            ]
+          }
+        };
+
+        constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
+        // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
+        navigator.mediaDevices.getUserMedia(constraints).then(getChromeScreenSuccess).catch(errorHandler);
+      }
+    } else if (event.data.type == 'janusGetScreenPending') {
+        window.clearTimeout(event.data.id);
+    }
+  });
+}
