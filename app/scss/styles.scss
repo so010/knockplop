@@ -3,7 +3,17 @@ body{
   padding:0;
   border:0;
   background-color:rgba(0,0,0,0);
+  background-image: url("background.jpg");
+  background-repeat:no-repeat;
+  background-size:cover;
 }
+
+.logo {
+  position:fixed;
+  top:10px;
+  left:10px;
+}
+
 #videoDivWrapper {
   height: 85vh;
   position:fixed;
@@ -252,9 +262,9 @@ p { margin: 0; }
 #chat input[type="text"] {
 	border: 1px solid #ccc;
 	border-radius: 3px;
-	padding: 8px;
+	padding: 4px;
 	outline: none;
-	width: 234px;
+	width: 250px;
 }
 
 .chat-message-counter {
@@ -274,7 +284,7 @@ p { margin: 0; }
 	width: 28px;
 }
 
-/* .chat-close {
+/*.chat-close {
 	background: #1b2126;
 	border-radius: 50%;
 	color: #fff;
