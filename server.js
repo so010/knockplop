@@ -95,8 +95,11 @@ io.on('connection', function(socket) {
   socket.on('magnetURI', function(msg) {
     console.log('client disconnected: %s in room: ', socket.id, socket.room );
     socket.broadcast.to(socket.room).emit('magnetURI',{'pid':socket.id,'magnetURI':msg} );
-  })
-
+  });
+  socket.on('chat', function(msg) {
+    console.log('received chat message: from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(socket.room).emit('chat', {'pid':socket.id, 'chat':msg} );
+  });
 });
 
 

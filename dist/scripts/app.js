@@ -134,7 +134,7 @@ var iceServerManager = {
 // this returns one UDP-TURN, one TCP-TURN and one STUN server []
 // , returned TURN servers are the ones with fastest measured round trip time
   getFastestIceServers : function() {
-   var servers = []
+    var servers = []
     // get one stunserver:
     var i = 0
     while ( ( this.iceServers[i].urls.indexOf('stun') == -1 ) && ( i < this.iceServers.length - 1 ) ) { i++ }
@@ -322,6 +322,8 @@ var webtorrentClient = {}
 var dragDrop = {}
 var screensharing = false;
 var renegotiationNeeded = false;
+var chatHidden = true;
+var unreadMessages = 0;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -355,7 +357,7 @@ function getChromeScreenSuccess(screenStream) {
     screenStream.addTrack(audioStream.getAudioTracks()[0]);
     console.log("Chrome: using screen stream with audio track");
     getScreenSuccess(screenStream);
-  }).catch(errorHandler);  
+  }).catch(errorHandler);
 }
 
 function getCamSuccess(stream) {
@@ -401,7 +403,7 @@ function handleRenegotiation() {
     return;
   }
   // TODO The onnegotiationneeded callback seems to be called multiple times in Chrome, but only once (per addStream call?) in FF.
-  // Not sure if this is a Chrome bug, or just stems from not fully understanding when this event is fired, but this results in multiple offer SDPs 
+  // Not sure if this is a Chrome bug, or just stems from not fully understanding when this event is fired, but this results in multiple offer SDPs
   // and multiple answer SDPs being received, causing "harmless" error messages in the console. Screen sharing still seems to work though.
   console.debug("handleRenegotiation() called!");
   // Go through the list of participants and send each one a new SDP.
@@ -494,7 +496,11 @@ function initSocket() {
         console.log('torrent progress: ',torrent.progress,torrent.files[0].name,msg.pid)
       }.bind(msg))
     }.bind(msg))
-  })
+  });
+  socket.on('chat', function(msg) {
+    console.log('received chat from ', msg.pid, msg.chat);
+    appendChat(msg.chat);
+  });
   window.onunload = function(){socket.emit('bye')};
 }
 
@@ -506,7 +512,7 @@ function createPeerConnection(pid,turn) {
     /*
     if ( typeof(msg.turn) != 'undefined') {
       participantList[pid].turn=turn;
-      peerConnectionConfig.iceServers = 
+      peerConnectionConfig.iceServers =
         participantList[pid].turn.concat(peerConnectionConfig.iceServers)
     }
     */
@@ -537,7 +543,7 @@ function receivedDescription(msg){
     // Create a PeerConnection object only if we don't already have one for this pid.
     if (participantList[msg.pid] == undefined) {
       participantList[msg.pid]={};
-      participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn); 
+      participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
       if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
         participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
         participantList[msg.pid].peerConnection.addStream(localStream)
@@ -562,7 +568,7 @@ function deleteParticipant(pid){
   if (typeof(participantList[pid]) != 'undefined'){
     console.log('removing participant: ',pid)
     participantList[pid].peerConnection.close();
-    if ( typeof participantList[pid].videoDiv == 'object' ) { 
+    if ( typeof participantList[pid].videoDiv == 'object' ) {
       participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
     }
     delete participantList[pid];
@@ -575,10 +581,10 @@ function deleteParticipant(pid){
 function gotIceCandidate(candidate, pid) {
   if(candidate != null) {
     // console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
-    if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror 
+    if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror
       socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
     }
-    else { // candidates from mirroring set we directly ( but only relay candidates ) 
+    else { // candidates from mirroring set we directly ( but only relay candidates )
       if ( candidate.candidate.split("typ")[1].split(" ",2 )[1] == 'relay' )  {
         if (pid == 'mirrorReceiver') { pid = 'mirrorSender' }
         else { pid = 'mirrorReceiver' }
@@ -604,25 +610,25 @@ function sendSDP(sdp, pid) {
   msg.sdp = sdp
   msg.pid = pid
   // mirroring description are not sent via signalling server but managed locally:
-  if ( pid.indexOf('mirror') == -1 ){ 
+  if ( pid.indexOf('mirror') == -1 ){
     socket.emit('sdp',msg)
     console.log('sending message:',msg)
   } else {
      // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
     if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
-    else { msg.pid = 'mirrorReceiver' } 
+    else { msg.pid = 'mirrorReceiver' }
     receivedDescription(msg)
   }
 }
 
-// this is about creating a video view for participant and 
+// this is about creating a video view for participant and
 // adding and activating video
 function addStream( stream, pid ) {
   console.debug("*** addStream() called for pid: " + pid);
   var videoDiv = document.getElementById(pid);
   if (videoDiv) {
     // Video element already exists for this pid, so just replace the source with the given stream.
-    replaceStream(stream, pid) 
+    replaceStream(stream, pid)
   } else {
       var videoDiv = {}
       participantList[pid].mediaStream = stream;
@@ -1006,7 +1012,7 @@ var progressBarManager = {
     document.getElementById('globalMessage').classList.remove('hidden')
     this.progressBar.animate(progress)
     if ( progress > 0.99999999 ) {
-      fadeOut(document.getElementById('globalMessage'))     
+      fadeOut(document.getElementById('globalMessage'))
     }
   },
 }
@@ -1061,20 +1067,20 @@ function audioAnalyser(stream) {
     var averagePercent = average / maxAudioLvl
     var audioIndicator = document.getElementById('audioIndicator')
     audioIndicator.style.opacity = averagePercent
-    if ( averagePercent > 0.25 ) { 
-      if ( averagePercent > 0.8 ) { 
-        audioIndicator.style.color = 'red' 
-      } 
-      else { 
-        audioIndicator.style.color = 'yellow' 
-        speakerDetected = true 
+    if ( averagePercent > 0.25 ) {
+      if ( averagePercent > 0.8 ) {
+        audioIndicator.style.color = 'red'
       }
-    } 
-    else { 
-      audioIndicator.style.color = null
-      speakerDetected = false 
+      else {
+        audioIndicator.style.color = 'yellow'
+        speakerDetected = true
+      }
     }
-  } 
+    else {
+      audioIndicator.style.color = null
+      speakerDetected = false
+    }
+  }
 }
 
 function getScreen(){
@@ -1135,7 +1141,7 @@ function pageReady() {
     })
   })
 
-  
+
   progressBarManager.init()
 
   // move initially configured ICE servers to testing before we use them
@@ -1145,7 +1151,7 @@ function pageReady() {
           progressBarManager.updateProgress.bind(progressBarManager))
   }
   setGlobalMessage('Initializing...')
-  initSocket()  
+  initSocket()
 
   window.addEventListener('resize', redrawVideoContainer);
   window.setTimeout(checkVideoContainer, 2500);
@@ -1186,4 +1192,73 @@ if (adapter.browserDetails.browser === 'chrome') {
         window.clearTimeout(event.data.id);
     }
   });
+}
+
+/* Chat */
+
+// Chat message submitted
+function chatMessage() {
+  var form = document.getElementById('chat-form');
+  var messageText = form.elements['message'].value;
+
+  var msg = {name : 'Test', time : Date.now(), message : messageText};
+
+  sendChat(msg);
+  appendChat(msg);
+
+  form.reset();
+
+  return false; // Return false to disable normal form submition
+}
+
+
+/*
+
+msg = {"name" : "displayname", "time" : "timestamp", "message" : "messagetext"}
+
+<div class="chat-message clearfix">
+  <div class="chat-message-content clearfix">
+    <span class="chat-time">13:35</span>
+    <h5>John Doe</h5>
+    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Error,
+      explicabo quasi ratione odio dolorum harum.</p>
+  </div> <!-- end chat-message-content -->
+</div> <!-- end chat-message -->
+<hr>
+
+*/
+
+// Chat appended to history
+function appendChat(msg) {
+  var chatHistory = document.getElementById('chat-history');
+
+  var chatText = document.createElement('p');
+  chatText.appendChild(document.createTextNode(msg.message));
+
+  var chatName = document.createElement('h5');
+  chatName.appendChild(document.createTextNode(msg.name));
+
+  var time = new Date(msg.time);
+  var chatTime = document.createElement('span');
+  chatTime.className = 'chat-time';
+  chatTime.appendChild(document.createTextNode(time.getHours() + ':' + time.getMinutes()));
+
+  var chatMessageContent = document.createElement('div');
+  chatMessageContent.className = 'chat-message-content clearfix';
+  chatMessageContent.appendChild(chatTime);
+  chatMessageContent.appendChild(chatName);
+  chatMessageContent.appendChild(chatText);
+
+  var chatMessage = document.createElement('div');
+  chatMessage.className = 'chat-message clearfix';
+  chatMessage.appendChild(chatMessageContent);
+
+  chatHistory.appendChild(chatMessage);
+  chatHistory.appendChild(document.createElement('hr'));
+
+  chatHistory.scrollTop = chatHistory.scrollHeight - chatHistory.clientHeight;
+}
+
+function sendChat(msg) {
+  socket.emit('chat', msg);
 }
