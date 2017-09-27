@@ -1201,7 +1201,8 @@ function chatMessage() {
   var form = document.getElementById('chat-form');
   var messageText = form.elements['message'].value;
 
-  var msg = {name : 'Test', time : Date.now(), message : messageText};
+  // Empty name for now
+  var msg = {name : '', time : Date.now(), message : messageText};
 
   sendChat(msg);
   appendChat(msg);
