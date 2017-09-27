@@ -3,9 +3,9 @@ body {
   padding: 0;
   border: 0;
   background-color: transparent;
-  background-image: url("background.jpg");
+  background-image: url("background.svg");
   background-repeat: no-repeat;
-  background-size: cover; }
+  background-size: 100% 100vh; }
 
 .logo {
   position: fixed;
