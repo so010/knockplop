@@ -244,14 +244,14 @@ p {
   font-size: 10px; }
 
 #chat form {
-  padding: 24px; }
+  padding: 10px; }
 
 #chat input[type="text"] {
   border: 1px solid #ccc;
   border-radius: 3px;
   padding: 4px;
   outline: none;
-  width: 250px; }
+  width: 280px; }
 
 .chat-message-counter {
   background: #e62727;

@@ -4,8 +4,8 @@ body{
   border:0;
   background-color:rgba(0,0,0,0);
   background-image: url("background.jpg");
-  background-repeat:no-repeat;
-  background-size:cover;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .logo {
@@ -256,7 +256,7 @@ p { margin: 0; }
 }
 
 #chat form {
-	padding: 24px;
+	padding: 10px;
 }
 
 #chat input[type="text"] {
@@ -264,7 +264,7 @@ p { margin: 0; }
 	border-radius: 3px;
 	padding: 4px;
 	outline: none;
-	width: 250px;
+	width: 280px;
 }
 
 .chat-message-counter {
