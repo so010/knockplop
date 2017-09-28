@@ -46,6 +46,9 @@
       <div id="templateVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
         onmousemove="onMouseMoveAction(event.currentTarget.id)">
         <div class="overlayTopRight fadeOutElements">
+
+        </div>
+        <div class="overlayTopRight fadeOutElements">
           <span class="videoMuteIcon material-icons md-light hidden"
             onclick="unMuteVideo(event.target.parentElement.parentElement.id)">
             videocam_off
@@ -123,7 +126,7 @@
 
           <form id="chat-form" onSubmit="return chatMessage()">
             <fieldset>
-              <input type="text" name="message" placeholder="Type your message…" autofocus><input type="hidden">
+              <input type="text" name="message" autocomplete="off" placeholder="Type your message…" autofocus><input type="hidden">
             </fieldset>
           </form>
         </div> <!-- end chat -->

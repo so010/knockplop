@@ -1124,6 +1124,32 @@ function getCam(){
 }
 
 function pageReady() {
+  // JQuery GUI stuff
+  $('#chat header').on('click', function() {
+    if (chatHidden) { // Clicked on hidden chat
+      $('.chat').slideToggle(300, 'swing');
+      $('.chat-message-counter').fadeOut(300, 'swing');
+      chatHidden = false;
+      unreadMessages = 0;
+      notificationHidden = true;
+    } else { // Clicked on open chat
+      $('.chat').slideToggle(300, 'swing');
+      // $('.chat-message-counter').fadeToggle(300, 'swing');
+
+      chatHidden = true;
+      unreadMessages = 0;
+      notificationHidden = true;
+    }
+  });
+
+  $('.chat').slideToggle(0);
+  // $('.chat-message-counter').fadeToggle(0, 'swing');;
+
+  // appending HTML5 Audio Tag in HTML Body
+  $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
+
+  // End JQuery GUI stuff
+
   // getting some HTML-elements we need later and roomname:
   room = document.URL.split("/")[3];
   localVideo = document.getElementById('localVideo');
@@ -1277,32 +1303,3 @@ function appendChat(msg) {
 function sendChat(msg) {
   socket.emit('chat', msg);
 }
-
-/* JQuery GUI stuff */
-$(document).ready(function() {
-  $('#chat header').on('click', function() {
-    if (chatHidden) { // Clicked on hidden chat
-      $('.chat').slideToggle(300, 'swing');
-      $('.chat-message-counter').fadeOut(300, 'swing');
-      chatHidden = false;
-      unreadMessages = 0;
-      notificationHidden = true;
-    } else { // Clicked on open chat
-      $('.chat').slideToggle(300, 'swing');
-      // $('.chat-message-counter').fadeToggle(300, 'swing');
-
-      chatHidden = true;
-      unreadMessages = 0;
-      notificationHidden = true;
-    }
-  });
-
-  $('.chat').slideToggle(0);
-  // $('.chat-message-counter').fadeToggle(0, 'swing');;
-
-  // appending HTML5 Audio Tag in HTML Body
-  $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
-
-  // play sound
-
-});
