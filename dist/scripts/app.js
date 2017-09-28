@@ -311,6 +311,7 @@ var localVideo;
 var localStream;
 var socket;
 var participantList={};
+var userPid;
 var videoContainer,videoContainerChanged,bigVideoContainer;
 var room;
 var dragLastOver,dragSource;
@@ -326,6 +327,7 @@ var chatHidden = true;
 var notificationHidden = true;
 var unreadMessages = 0;
 var userName = "";
+var chatMessages = [];
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -431,8 +433,9 @@ function mirrorMe () {
 
 function initSocket() {
   socket = io('https://' + document.domain + ':' + document.location.port);
-  socket.on('connection',function(socket){
+  socket.on('connect', () => {
     console.log('Socket connected!');
+    userPid = socket.id;
   });
   socket.on('restTURN',function(msg){
     if ( msg.restTURN != null ) {
@@ -505,6 +508,14 @@ function initSocket() {
     console.log('received chat from ', msg.pid, msg.chat);
     appendChat(msg.chat);
   });
+  socket.on('requestchat', function(msg) {
+    console.log('received request for chat history from ', msg.pid);
+    chatRequest(msg.pid);
+  });
+  socket.on('chathistory', function(msg) {
+    console.log('received chat history from ', msg.pid, msg.history.chatMessages);
+    receivedChatHistory(msg.history.chatMessages);
+  });
   socket.on('name', function(msg) {
     console.log('received name from ', msg.pid, msg.name);
     receiveName(msg);
@@ -565,6 +576,7 @@ function receivedDescription(msg){
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
     participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
+    socket.emit('requestchat', {'pid' : msg.pid});
   }
   else if (msg.sdp.type == 'answer') {
     console.log("Received ANSWER SDP from pid: " + msg.pid);
@@ -1263,7 +1275,9 @@ function chatMessage() {
   var messageText = form.elements['message'].value;
 
   // Empty name for now
-  var msg = {name : userName, time : Date.now(), message : messageText};
+  var msg = {pid: userPid, name : userName, time : Date.now(), message : messageText};
+
+  chatMessages.push(msg);
 
   sendChat(msg);
   appendChat(msg);
@@ -1273,6 +1287,21 @@ function chatMessage() {
   return false; // Return false to disable normal form submition
 }
 
+function receiveChat(msg) {
+  chatMessages.push(msg);
+
+  appendChat(msg);
+}
+
+function receivedChatHistory(history) {
+  for (var chat in history) {
+    receiveChat(history[chat]);
+  }
+}
+
+function chatRequest(pid) {
+  socket.emit('chathistory', {'history' : { chatMessages }, 'pid' : pid});
+}
 
 /*
 

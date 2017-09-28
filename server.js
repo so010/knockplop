@@ -100,6 +100,14 @@ io.on('connection', function(socket) {
     console.log('received chat message: from %s in room: ', socket.id, socket.room );
     socket.broadcast.to(socket.room).emit('chat', {'pid':socket.id, 'chat':msg} );
   });
+  socket.on('requestchat', function(msg) {
+    console.log('received request for chat history : from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(msg.pid).emit('requestchat', {'pid' : socket.id} );
+  });
+  socket.on('chathistory', function(msg) {
+    console.log('received chat history : from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(msg.pid).emit('chathistory', {'pid' : socket.id, 'history' : msg.history} );
+  });
   socket.on('name', function(msg) {
     console.log('received name: from %s in room: ', socket.id, socket.room );
     socket.broadcast.to(socket.room).emit('name', {'pid':socket.id, 'name':msg} );
