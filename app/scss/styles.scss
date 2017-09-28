@@ -86,6 +86,21 @@ video {
   display:flex;
 }
 
+.overlayTopCenter{
+  z-index: 99;
+  top:3px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  color:rgba(50, 50, 50, 0.8);
+  background-color:rgba(200, 200, 200, 0.9);
+  position: absolute;
+  font-size: 2vmin;
+  vertical-align: middle;
+  padding: 4px;
+  border-radius: 7px;
+  display: flex;
+}
+
 .overlayBottomRight{
   bottom:3px;
   right: 3px;
