@@ -5,7 +5,7 @@ body {
   background-color:rgba(0,0,0,0);
   background-image: url("background.svg");
   background-repeat: no-repeat;
-  background-size: 100% 100vh;
+  background-size: 100% 100%;
 }
 
 .logo {
@@ -60,8 +60,8 @@ video {
 
 .overlayTopRight {
   z-index: 99;
-  right: 2px;
-  top: 2px;
+  right: 3px;
+  top: 3px;
   background-color:rgba(100,100,100,0.3);
   position: absolute;
   font-size:4.5vh;
@@ -74,8 +74,8 @@ video {
 
 .overlayTopLeft{
   z-index: 99;
-  top:2px;
-  left: 2px;
+  top:3px;
+  left: 3px;
   color:rgba(255,255,255,0.8);
 //  background-color:rgba(150,150,150,0.4);
   position: absolute;
@@ -87,8 +87,8 @@ video {
 }
 
 .overlayBottomRight{
-  bottom:2px;
-  right: 2px;
+  bottom:3px;
+  right: 3px;
   color:rgba(255,255,255,0.8);
   background-color:rgba(150,150,150,0.4);
   position: absolute;
@@ -100,8 +100,8 @@ video {
 }
 
 .overlayBottomLeft{
-  bottom:2px;
-  left: 2px;
+  bottom:3px;
+  left: 3px;
   color:rgba(255,255,255,0.8);
   background-color:rgba(150,150,150,0.4);
   position: absolute;
@@ -193,7 +193,7 @@ video {
   width:100%;
   height:100vh;
   overflow: hidden;
-  position: fixed;
+  // position: fixed;
   z-index: -1;
 }
 #bigVideoContainer video{
