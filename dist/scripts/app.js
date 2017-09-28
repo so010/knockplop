@@ -467,6 +467,7 @@ function initSocket() {
   socket.on('participantReady',function(msg){
     console.log('got participantReady:',msg );
     callParticipant(msg);
+    $('#chatAudio')[0].play();
   });
   socket.on('bye',function(msg){
     console.log('got bye from:',msg.pid );
