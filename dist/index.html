@@ -46,9 +46,6 @@
       <div id="templateVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
         onmousemove="onMouseMoveAction(event.currentTarget.id)">
         <div class="overlayTopRight fadeOutElements">
-
-        </div>
-        <div class="overlayTopRight fadeOutElements">
           <span class="videoMuteIcon material-icons md-light hidden"
             onclick="unMuteVideo(event.target.parentElement.parentElement.id)">
             videocam_off
@@ -69,6 +66,9 @@
             onclick="setBigVideo(event.target.parentElement.parentElement.id)">
             arrow_drop_up
           </span>
+        </div>
+        <div id="remoteTopLeft" class="overlayTopLeft">
+          <span class="remotenametag">No name</span>
         </div>
       </div>
       <div id="localVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
@@ -100,6 +100,7 @@
           </span>
         </div>
         <div id="localTopLeft" class="overlayTopLeft">
+          <span class="nametag">Enter name...</span>
         </div>
         <div id="localMessage" class="overlayMiddleCenter">
           <span id="joinButton" class="hidden">

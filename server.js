@@ -100,6 +100,10 @@ io.on('connection', function(socket) {
     console.log('received chat message: from %s in room: ', socket.id, socket.room );
     socket.broadcast.to(socket.room).emit('chat', {'pid':socket.id, 'chat':msg} );
   });
+  socket.on('name', function(msg) {
+    console.log('received name: from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(socket.room).emit('name', {'pid':socket.id, 'name':msg} );
+  });
 });
 
 

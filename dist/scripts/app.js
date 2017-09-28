@@ -325,6 +325,7 @@ var renegotiationNeeded = false;
 var chatHidden = true;
 var notificationHidden = true;
 var unreadMessages = 0;
+var userName = "";
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -459,6 +460,7 @@ function initSocket() {
   socket.on('sdp',function(msg){
     console.log('received sdp from',msg.pid,msg.turn);
     receivedDescription(msg)
+    sendName();
   });
   socket.on('iceCandidate',function(msg){
     // console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
@@ -502,6 +504,10 @@ function initSocket() {
   socket.on('chat', function(msg) {
     console.log('received chat from ', msg.pid, msg.chat);
     appendChat(msg.chat);
+  });
+  socket.on('name', function(msg) {
+    console.log('received name from ', msg.pid, msg.name);
+    receiveName(msg);
   });
   window.onunload = function(){socket.emit('bye')};
 }
@@ -1148,6 +1154,33 @@ function pageReady() {
   // appending HTML5 Audio Tag in HTML Body
   $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
 
+  // Editable name tag
+  $(document).on("click", ".nametag", function() {
+    var original_text = $(this).text();
+    var new_input = $("<input class=\"nameeditor\"/>");
+    if (original_text != "Enter name...") {
+      new_input.val(original_text);
+    }
+    $(this).replaceWith(new_input);
+    new_input.focus();
+  });
+
+  $(document).on("blur", ".nameeditor", function() {
+    var new_input = $(this).val();
+    var updated_text = $("<span class=\"nametag\">");
+    if (new_input.trim() == "") {
+      userName = "";
+      updated_text.text("Enter name...");
+    } else {
+      userName = new_input;
+      updated_text.text(new_input);
+    }
+
+    sendName();
+
+    $(this).replaceWith(updated_text);
+  });
+
   // End JQuery GUI stuff
 
   // getting some HTML-elements we need later and roomname:
@@ -1230,7 +1263,7 @@ function chatMessage() {
   var messageText = form.elements['message'].value;
 
   // Empty name for now
-  var msg = {name : '', time : Date.now(), message : messageText};
+  var msg = {name : userName, time : Date.now(), message : messageText};
 
   sendChat(msg);
   appendChat(msg);
@@ -1300,6 +1333,16 @@ function appendChat(msg) {
   }
 }
 
+function sendName() {
+  socket.emit('name', userName);
+}
+
 function sendChat(msg) {
   socket.emit('chat', msg);
+}
+
+// msg = {pid: pid, name: name}
+function receiveName(msg) {
+  var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopLeft"]["children"][0];
+  nameholder.innerHTML = msg.name;
 }
