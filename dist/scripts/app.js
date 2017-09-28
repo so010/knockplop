@@ -1266,6 +1266,7 @@ function appendChat(msg) {
     unreadCounter.innerHTML = unreadMessages;
 
     if (notificationHidden) {
+      $('#chatAudio')[0].play();
       $('.chat-message-counter').fadeIn(300, 'swing');
       notificationHidden = false;
     }
@@ -1297,4 +1298,10 @@ $(document).ready(function() {
 
   $('.chat').slideToggle(0);
   // $('.chat-message-counter').fadeToggle(0, 'swing');;
+
+  // appending HTML5 Audio Tag in HTML Body
+  $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
+
+  // play sound
+
 });
