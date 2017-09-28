@@ -323,6 +323,7 @@ var dragDrop = {}
 var screensharing = false;
 var renegotiationNeeded = false;
 var chatHidden = true;
+var notificationHidden = true;
 var unreadMessages = 0;
 
 function redrawVideoContainer () {
@@ -1242,7 +1243,7 @@ function appendChat(msg) {
   var time = new Date(msg.time);
   var chatTime = document.createElement('span');
   chatTime.className = 'chat-time';
-  chatTime.appendChild(document.createTextNode(time.getHours() + ':' + time.getMinutes()));
+  chatTime.appendChild(document.createTextNode((time.getHours() < 10 ? '0' : '') + time.getHours() + ':' + (time.getMinutes() < 10 ? '0' : '') + time.getMinutes()));
 
   var chatMessageContent = document.createElement('div');
   chatMessageContent.className = 'chat-message-content clearfix';
@@ -1258,8 +1259,42 @@ function appendChat(msg) {
   chatHistory.appendChild(document.createElement('hr'));
 
   chatHistory.scrollTop = chatHistory.scrollHeight - chatHistory.clientHeight;
+
+  if (chatHidden) { // Update unread count and show notification if hidden
+    unreadMessages++;
+    var unreadCounter = document.getElementById('chat-message-counter');
+    unreadCounter.innerHTML = unreadMessages;
+
+    if (notificationHidden) {
+      $('.chat-message-counter').fadeIn(300, 'swing');
+      notificationHidden = false;
+    }
+  }
 }
 
 function sendChat(msg) {
   socket.emit('chat', msg);
 }
+
+/* JQuery GUI stuff */
+$(document).ready(function() {
+  $('#chat header').on('click', function() {
+    if (chatHidden) { // Clicked on hidden chat
+      $('.chat').slideToggle(300, 'swing');
+      $('.chat-message-counter').fadeOut(300, 'swing');
+      chatHidden = false;
+      unreadMessages = 0;
+      notificationHidden = true;
+    } else { // Clicked on open chat
+      $('.chat').slideToggle(300, 'swing');
+      // $('.chat-message-counter').fadeToggle(300, 'swing');
+
+      chatHidden = true;
+      unreadMessages = 0;
+      notificationHidden = true;
+    }
+  });
+
+  $('.chat').slideToggle(0);
+  // $('.chat-message-counter').fadeToggle(0, 'swing');;
+});

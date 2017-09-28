@@ -2,15 +2,15 @@
 <html>
     <head>
         <link rel="stylesheet" href="bootstrap/dist/css/bootstrap.min.css">
+        <script src="jquery/dist/jquery.min.js"></script>
         <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
         <script src="/socket.io/socket.io.js"></script>
-        <script src="scripts/app.js"></script>
-        <script src="jquery/dist/jquery.min.js"></script>
         <script src="bootstrap/dist/js/bootstrap.min.js"></script>
         <script src="progressbar.js/dist/progressbar.min.js"></script>
 	      <script src="client-config.js"></script>
         <script src="webtorrent/webtorrent.min.js"></script>
         <script src="drag-drop/dragdrop.min.js"></script>
+        <script src="scripts/app.js"></script>
 	<link rel="stylesheet" type="text/css" href="css/all.css">
         <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport' />
     </head>
@@ -112,7 +112,7 @@
       <div id="chat">
         <header class="clearfix">
           <h4>Chat</h4>
-          <!-- <span id="chat-message-counter" class="chat-message-counter">0</span> -->
+          <span id="chat-message-counter" class="chat-message-counter">0</span>
         </header>
         <div class="chat">
 
@@ -131,14 +131,6 @@
 
       <script type="text/javascript">
         window.onload = pageReady;
-
-        $('#chat header').on('click', function() {
-            $('.chat').slideToggle(300, 'swing');
-            $('.chat-message-counter').fadeToggle(300, 'swing');
-        });
-
-        $('.chat').slideToggle(0);
-        $('.chat-message-counter').fadeToggle(0, 'swing');;
       </script>
     </body>
 </html>
