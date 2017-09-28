@@ -20,7 +20,6 @@ var notificationHidden = true;
 var unreadMessages = 0;
 var userName = "";
 var chatMessages = [];
-var haveChatHistory = false;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -269,9 +268,8 @@ function receivedDescription(msg){
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
     participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
-    if (!haveChatHistory) {
+    if (chatMessages.length === 0) {
       socket.emit('requestchat', {'pid' : msg.pid});
-      haveChatHistory = true;
     }
   }
   else if (msg.sdp.type == 'answer') {
@@ -990,8 +988,10 @@ function receiveChat(msg) {
 }
 
 function receivedChatHistory(history) {
-  for (var chat in history) {
-    receiveChat(history[chat]);
+  if (chatMessages.length === 0) {
+    for (var chat in history) {
+      receiveChat(history[chat]);
+    }
   }
 }
 
