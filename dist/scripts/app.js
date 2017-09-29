@@ -1376,6 +1376,6 @@ function sendChat(msg) {
 
 // msg = {pid: pid, name: name}
 function receiveName(msg) {
-  var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopLeft"]["children"][0];
+  var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
   nameholder.innerHTML = msg.name;
 }
