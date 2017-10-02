@@ -10,7 +10,8 @@ body {
 .logo {
   position: fixed;
   top: 10px;
-  left: 10px; }
+  left: 10px;
+  height: 8vh; }
 
 #videoDivWrapper {
   height: 85vh;
@@ -22,7 +23,7 @@ body {
   border: 0;
   margin: 0;
   top: 50%;
-  transform: translate(0%, -50%);
+  transform: translate(0%, -45%);
   pointer-events: none; }
 
 #videoContainer {
@@ -51,94 +52,65 @@ video {
   margin: 0;
   box-shadow: 0px 0px 10px 2px #000000; }
 
+.overlayTopCenter:hover,
+.overlayBottom:hover,
+.overlayMiddleCenter:hover,
+.overlayBottomLeft:hover,
+.overlayBottomRight:hover,
+.overlayTopLeft:hover,
+.overlayTopRight:hover {
+  background: rgba(0, 0, 0, 0.7); }
+
+.overlayTopCenter,
+.overlayBottom,
+.overlayMiddleCenter,
+.overlayBottomLeft,
+.overlayBottomRight,
+.overlayTopLeft,
+.overlayTopRight {
+  position: absolute;
+  vertical-align: middle;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  font-size: 4.5vmin;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.2); }
+
 .overlayTopRight {
   z-index: 99;
   right: 3px;
   top: 3px;
-  background-color: rgba(100, 100, 100, 0.3);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex;
   cursor: pointer; }
 
 .overlayTopLeft {
   z-index: 99;
   top: 3px;
-  left: 3px;
-  color: rgba(50, 50, 50, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 2vmin;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  left: 3px; }
 
 .overlayTopCenter {
   z-index: 99;
   top: 3px;
   left: 50%;
-  transform: translate(-50%, 0);
-  color: rgba(50, 50, 50, 0.8);
-  background-color: rgba(200, 200, 200, 0.9);
-  position: absolute;
-  font-size: 2vmin;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  font-size: 3.5vmin;
+  transform: translate(-50%, 0); }
 
 .overlayBottomRight {
   bottom: 3px;
-  right: 3px;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  right: 3px; }
 
 .overlayBottomLeft {
   bottom: 3px;
-  left: 3px;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  left: 3px; }
 
 .overlayMiddleCenter {
   z-index: 99;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex;
   bottom: 10%;
   left: 50%;
   transform: translate(-50%, 0%); }
 
 .overlayBottom {
   z-index: 99;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex;
   bottom: 0%;
   left: 50%;
   transform: translate(-50%, 0%);
@@ -202,7 +174,7 @@ video {
   border: none;
   background: #ddd;
   color: #000;
-  font-size: 2vmin;
+  font-size: 3.5vmin;
   font-family: arial;
   width: 10vw;
   cursor: text; }
