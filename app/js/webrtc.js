@@ -691,7 +691,7 @@ function joinRoom(){
   socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
   document.getElementById('joinButton').classList.add('hidden')
   document.getElementById('localMessage').classList.add('hidden')
-  document.getElementById('localTopLeft').appendChild(document.getElementById('audioIndicator'))
+  document.getElementById('localTopCenter').insertBefore(document.getElementById('audioIndicator'),document.getElementById('localTopCenter').childNodes[0])
   replaceStream(localStream,'localVideo')
   deleteParticipant('mirrorReceiver')
   deleteParticipant('mirrorSender')
