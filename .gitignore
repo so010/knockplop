@@ -4,3 +4,5 @@ config.js
 *.swp
 bower_components
 *-config.js
+google_verify
+*.log

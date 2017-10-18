@@ -24,6 +24,7 @@ app.use('/pix',express.static(__dirname + '/pix'));
 app.use('/scripts',express.static(__dirname + '/dist/scripts'));
 app.use('/css',express.static(__dirname + '/dist/css'));
 app.use('/client-config.js',express.static(__dirname + '/client-config.js'));
+app.use('/',express.static(__dirname + '/google_verify'))
 app.get('/', function (req, res) {
    console.log(req.url);
    res.sendFile(__dirname + '/' + 'dist/chooseRoom.html');

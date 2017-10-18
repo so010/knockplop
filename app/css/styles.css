@@ -11,6 +11,13 @@ body {
   position: fixed;
   top: 10px;
   left: 10px;
+  height: 8vh;
+  z-index: 0; }
+
+.logoStartscreen {
+  position: fixed;
+  top: 10px;
+  left: 10px;
   height: 8vh; }
 
 #videoDivWrapper {
@@ -55,7 +62,20 @@ video {
   padding: 0;
   border: 0;
   margin: 0;
-  box-shadow: 0px 0px 10px 2px #000000; }
+  box-shadow: 0px 0px 10px 2px #000000;
+  z-index: 10; }
+
+:-webkit-full-screen .tohide {
+  display: none; }
+
+:-moz-full-screen .tohide {
+  display: none; }
+
+:-ms-fullscreen .tohide {
+  display: none; }
+
+:fullscreen .tohide {
+  display: none; }
 
 .overlayTopCenter:hover,
 .overlayBottom:hover,
