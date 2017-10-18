@@ -1,37 +1,166 @@
 "use strict";
-var localVideo;
-var localStream;
-var socket;
-var participantList={};
-var videoContainer,videoContainerChanged,bigVideoContainer;
-var room;
-var dragLastOver,dragSource;
-var hidingElementsStatus = "visible";
-var restTURN;
-var fadeOutTimer;
-var progressBar = {}
-var webtorrentClient = {}
-var dragDrop = {}
 
-function redrawVideoContainer () {
-  videoContainer.style.display = 'none'
-  setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
-}
-function getScreenSuccess (stream) {
-  stream.type = 'screen'
-  participantList["localVideo"].screenStream = stream
+var iceServerManager = {
+  iceServers:[], // here put we all tested and working iceServers in
+  testIceServers:[], // the array of iceServers we are going to test (queue)
+  disabledIceServers:[], // iceServers that are not working 
+  fastestUdpTurnServer:null, // fastest found TURN server for udp
+  fastestTcpTurnServer:null, // fastest found TURN server for tcp
+  callbacks:[], // array of callback functions
+  progressEvent:null, // this will be called for progress info
+  runningTests:{}, // list of running tests
 
+  restart : function(callback){
+    this.fastestUdpTurnServer = null
+    this.fastestTcpTurnServer = null
+    var servers = this.iceServers.splice(0,this.iceServers.length - 1)
+    for ( var i = 0 ; i < this.disabledIceServers.length; i++ ) {
+      servers.push(this.disabledIceServers.splice(i,1)[0])
+    }
+    this.startTesting(servers,callback)
+  },
+
+  startTesting : function(iceServers,callback,progressEvent){ 
+    if(callback && typeof callback == "function"){
+      this.callbacks.push(callback)
+    }
+    if(progressEvent && typeof progressEvent == "function"){
+      this.progressEvent = progressEvent
+    }
+    if ( iceServers.length == 0 ) return
+    var workerCount = 18 // number of max peerconnection to open for testing
+    //  no STUN-server testing yet so just moving them to iceServers array:    
+    for ( var i = 0 ; i < iceServers.length; i++ ) {
+      if ( iceServers[i].urls.indexOf('stun') != -1 ) {
+        this.iceServers.push(iceServers.splice(i,1)[0])
+      }
+    }
+    // pushing iceServers to my local testIceServers array for later use    
+    Array.prototype.push.apply(this.testIceServers,iceServers)
+    // TURN Server testing: not all at the same time to reduce network issues and Firefox problems with to many PeerConnections
+    for ( var i = 1; i <= workerCount; i++ ){
+      setTimeout(this.turnServerTest.bind(this) ,0)
+    }
+  },
+
+  onTurnServerTested : function(turnServer){
+    delete this.runningTests[turnServer.urls]
+    if ( turnServer.status == 'tested' ) { 
+      this.iceServers.push(turnServer)
+      if ( turnServer.urls.indexOf('udp') != -1 ) {
+        if ( this.fastestUdpTurnServer == null || turnServer.rtt < this.fastestUdpTurnServer.rtt ) {
+          this.fastestUdpTurnServer = turnServer
+        }
+      } else { // tcp
+        if ( this.fastestTcpTurnServer == null || turnServer.rtt < this.fastestTcpTurnServer.rtt ) {
+          this.fastestTcpTurnServer = turnServer
+        }
+      }
+    }
+    else { 
+      if ( turnServer.status == 'disabled' ) {
+        this.disabledIceServers.push(turnServer)
+      }
+    }
+    delete turnServer.rttTester
+    console.log ( 'onTurnServerTested: ' + turnServer.urls + ' status: ' + turnServer.status + ' rtt: ' + turnServer.rtt) 
+    // sending progress info
+    if ( this.progressEvent != null ) { 
+      var progress = ( this.disabledIceServers.length + this.iceServers.length ) / 
+        ( this.testIceServers.length + Object.keys(this.runningTests).length + this.iceServers.length + this.disabledIceServers.length ) 
+      this.progressEvent(progress) 
+    }
+    // call the callbacks if nothing left to test and no tests are still running
+    if ( this.testIceServers.length == 0 ) {
+      if ( Object.keys(this.runningTests).length == 0 ) { 
+        while ( this.callbacks.length > 0 ) {
+          this.callbacks.pop()()
+        }
+      }
+    } else { 
+      // test next Server
+      this.turnServerTest()
+    }
+  },
+
+  turnServerTest : function(){
+    if ( this.testIceServers.length == 0 ) { return }
+    console.log('turnServerTest 1 worker started, testQueue: ' + 
+                this.testIceServers.length + ' tested: ' + 
+                this.iceServers.length) 
+   var testIceServer = this.testIceServers.shift()
+    console.log('turnServerTest: ' + testIceServer.urls) 
+    if ( testIceServer.urls.indexOf('turn') != -1 ) { // TURN-servers only
+      testIceServer.rttTester = new RttTester(this.onTurnServerTested.bind(this), testIceServer)
+      this.runningTests[testIceServer.urls] = true
+    }
+    else{ // this should not happen(all STUN servers should be moved before this is executed) but you never know
+      this.iceServers.push(testIceServer)
+      this.turnServerTest()
+    }
+  },
+
+// this returns all known TURN servers including STUN []
+  getIceServers : function(){
+    var servers = []
+    for ( var i in this.iceServers ) {
+    var server = {}
+      server.urls = this.iceServers[i].urls
+      if ( typeof this.iceServers[i].credential != 'undefined' ) server.credential = this.iceServers[i].credential
+      if ( typeof this.iceServers[i].username != 'undefined' ) server.username = this.iceServers[i].username
+      if ( typeof this.iceServers[i].rtt != 'undefined' ) server.rtt = this.iceServers[i].rtt
+      servers.push(server)
+    }
+    return servers
+  },
+
+// this returns all known TURN servers []
+  getTurnServers : function(){
+    var servers = []
+    for ( var i in this.iceServers ) {
+      if ( this.iceServers[i].urls.indexOf('turn') != -1 ) {
+        var server = {}
+        server.urls = this.iceServers[i].urls
+        if ( typeof this.iceServers[i].credential != 'undefined' ) server.credential = this.iceServers[i].credential
+        if ( typeof this.iceServers[i].username != 'undefined' ) server.username = this.iceServers[i].username
+        if ( typeof this.iceServers[i].rtt != 'undefined' ) server.rtt = this.iceServers[i].rtt
+        servers.push(server)
+      }
+    }
+    return servers
+  },
+
+
+// this returns one UDP-TURN, one TCP-TURN and one STUN server []
+// , returned TURN servers are the ones with fastest measured round trip time
+  getFastestIceServers : function() {
+    var servers = []
+    // get one stunserver:
+    var i = 0
+    while ( ( this.iceServers[i].urls.indexOf('stun') == -1 ) && ( i < this.iceServers.length - 1 ) ) { i++ }
+    if ( i < this.iceServers.length ) servers.push(this.iceServers[i])
+    // and the fastest udp TURN server:
+    if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
+    // and the fastest tcp TURN server:
+    if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
+    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
+    return servers
+  },
+
+// this returns one UDP-TURN and one TCP-TURN server [], no STUN Server here included
+// returned TURN servers are the ones with fastest measured round trip time
+  getFastestTurnServers : function() {
+    var servers = []
+    // get the fastest udp TURN server:
+    if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
+    // and the fastest tcp TURN server:
+    if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
+    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
+    return servers
+  },
 }
 
-function getCamSuccess(stream) {
-  stream.type = 'camera'
-  localStream = stream;
-  participantList["localVideo"] = {};
-  addStream( stream, "localVideo" );
-  setGlobalMessage('Test remote streaming:')
-  mirrorMe()
-  audioAnalyser(stream)
-}
+"use strict";
 
 function RttTester (callback,turnServer){
   var dataChannelOptions = {
@@ -177,164 +306,122 @@ function RttTester (callback,turnServer){
   this.watchDogTimer = window.setTimeout(this.watchDog.bind(this), this.watchDogTimeout);
 }
 
-var iceServerManager = {
-  iceServers:[], // here put we all tested and working iceServers in
-  testIceServers:[], // the array of iceServers we are going to test (queue)
-  disabledIceServers:[], // iceServers that are not working 
-  fastestUdpTurnServer:null, // fastest found TURN server for udp
-  fastestTcpTurnServer:null, // fastest found TURN server for tcp
-  callbacks:[], // array of callback functions
-  progressEvent:null, // this will be called for progress info
-  runningTests:{}, // list of running tests
+"use strict";
+var localVideo;
+var localStream;
+var socket;
+var participantList={};
+var userPid;
+var videoContainer,videoContainerChanged,bigVideoContainer;
+var room;
+var dragLastOver,dragSource;
+var hidingElementsStatus = "visible";
+var restTURN;
+var fadeOutTimer;
+var progressBar = {}
+var webtorrentClient = {}
+var dragDrop = {}
+var screensharing = false;
+var renegotiationNeeded = false;
+var chatHidden = true;
+var notificationHidden = true;
+var unreadMessages = 0;
+var userName = "";
+var chatMessages = [];
 
-  restart : function(callback){
-    this.fastestUdpTurnServer = null
-    this.fastestTcpTurnServer = null
-    var servers = this.iceServers.splice(0,this.iceServers.length - 1)
-    for ( var i = 0 ; i < this.disabledIceServers.length; i++ ) {
-      servers.push(this.disabledIceServers.splice(i,1)[0])
-    }
-    this.startTesting(servers,callback)
-  },
+function redrawVideoContainer () {
+  videoContainer.style.display = 'none'
+  setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
+}
 
-  startTesting : function(iceServers,callback,progressEvent){ 
-    if(callback && typeof callback == "function"){
-      this.callbacks.push(callback)
-    }
-    if(progressEvent && typeof progressEvent == "function"){
-      this.progressEvent = progressEvent
-    }
-    if ( iceServers.length == 0 ) return
-    var workerCount = 18 // number of max peerconnection to open for testing
-    //  no STUN-server testing yet so just moving them to iceServers array:    
-    for ( var i = 0 ; i < iceServers.length; i++ ) {
-      if ( iceServers[i].urls.indexOf('stun') != -1 ) {
-        this.iceServers.push(iceServers.splice(i,1)[0])
+function setIsScreensharing(isScreensharing) {
+  screensharing = isScreensharing;
+  document.getElementById('screenshareIcon').innerHTML = screensharing ? 'stop_screen_share' : 'screen_share';
+}
+
+function getScreenSuccess (stream) {
+  setIsScreensharing(true);
+  stream.type = 'screen'
+  var prevLocalStream = localStream;
+  localStream = stream;
+  participantList["localVideo"].screenStream = stream
+  document.querySelector('video').srcObject = stream;
+  changeStreamsInPeerConnections(prevLocalStream, stream);
+}
+
+function getChromeScreenSuccess(screenStream) {
+  // Chrome (as of 59) doesn't allow the microphone to be retrieved when requesting screen sharing, so the workaround
+  // (as described in https://stackoverflow.com/a/20063211) is to request the microphone separately, and then add its audio track to the screen stream.
+  var audioOnlyConstraints = {
+    audio: true,
+    video: false
+  }
+  console.debug("Chrome: attempting to retrieve local microphone for screensharing");
+  navigator.mediaDevices.getUserMedia(audioOnlyConstraints).then(function(audioStream) {
+    screenStream.addTrack(audioStream.getAudioTracks()[0]);
+    console.log("Chrome: using screen stream with audio track");
+    getScreenSuccess(screenStream);
+  }).catch(errorHandler);
+}
+
+function getCamSuccess(stream) {
+  setIsScreensharing(false);
+  stream.type = 'camera'
+  var prevLocalStream = localStream;
+  localStream = stream;
+  if (participantList["localVideo"]) {
+    delete participantList["localVideo"].screenStream;
+    document.querySelector('video').srcObject = stream;
+    changeStreamsInPeerConnections(prevLocalStream, stream);
+  } else {
+    participantList["localVideo"] = {};
+    addStream( stream, "localVideo" );
+    setGlobalMessage('Test remote streaming:')
+    mirrorMe()
+    audioAnalyser(stream)
+  }
+}
+
+function changeStreamsInPeerConnections(oldStream, newStream) {
+  for (var pid in participantList) {
+    if (pid != "localVideo") {
+      // Changing streams of a connected peer connection will trigger SDP renegotiation.
+      renegotiationNeeded = true;
+
+      var pc = participantList[pid].peerConnection;
+      if ("removeTrack" in pc) {
+        pc.removeTrack(pc.getSenders()[0]);
+      } else {
+        pc.removeStream(oldStream);
       }
-    }
-    // pushing iceServers to my local testIceServers array for later use    
-    Array.prototype.push.apply(this.testIceServers,iceServers)
-    // TURN Server testing: not all at the same time to reduce network issues and Firefox problems with to many PeerConnections
-    for ( var i = 1; i <= workerCount; i++ ){
-      setTimeout(this.turnServerTest(),0)
-    }
-  },
 
-  onTurnServerTested : function(turnServer){
-    delete this.runningTests[turnServer.urls]
-    if ( turnServer.status == 'tested' ) { 
-      this.iceServers.push(turnServer)
-      if ( turnServer.urls.indexOf('udp') != -1 ) {
-        if ( this.fastestUdpTurnServer == null || turnServer.rtt < this.fastestUdpTurnServer.rtt ) {
-          this.fastestUdpTurnServer = turnServer
-        }
-      } else { // tcp
-        if ( this.fastestTcpTurnServer == null || turnServer.rtt < this.fastestTcpTurnServer.rtt ) {
-          this.fastestTcpTurnServer = turnServer
-        }
-      }
+      // TODO use addTrack instead of addStream?
+      // pc.addTrack(stream.getVideoTracks()[0], stream);
+      pc.addStream(newStream);
     }
-    else { 
-      if ( turnServer.status == 'disabled' ) {
-        this.disabledIceServers.push(turnServer)
-      }
-    }
-    delete turnServer.rttTester
-    console.log ( 'onTurnServerTested: ' + turnServer.urls + ' status: ' + turnServer.status + ' rtt: ' + turnServer.rtt) 
-    // sending progress info
-    if ( this.progressEvent != null ) { 
-      var progress = ( this.disabledIceServers.length + this.iceServers.length ) / 
-        ( this.testIceServers.length + Object.keys(this.runningTests).length + this.iceServers.length + this.disabledIceServers.length ) 
-      this.progressEvent(progress) 
-    }
-    // call the callbacks if nothing left to test and no tests are still running
-    if ( this.testIceServers.length == 0 ) {
-      if ( Object.keys(this.runningTests).length == 0 ) { 
-        while ( this.callbacks.length > 0 ) {
-          this.callbacks.pop()()
-        }
-      }
-    } else { 
-      // test next Server
-      this.turnServerTest()
-    }
-  },
+  }
+}
 
-  turnServerTest : function(){
-    if ( this.testIceServers.length == 0 ) { return }
-    console.log('turnServerTest 1 worker started, testQueue: ' + 
-                this.testIceServers.length + ' tested: ' + 
-                this.iceServers.length) 
-   var testIceServer = this.testIceServers.shift()
-    console.log('turnServerTest: ' + testIceServer.urls) 
-    if ( testIceServer.urls.indexOf('turn') != -1 ) { // TURN-servers only
-      testIceServer.rttTester = new RttTester(this.onTurnServerTested.bind(this), testIceServer)
-      this.runningTests[testIceServer.urls] = true
+function handleRenegotiation() {
+  if (!renegotiationNeeded) {
+    return;
+  }
+  // TODO The onnegotiationneeded callback seems to be called multiple times in Chrome, but only once (per addStream call?) in FF.
+  // Not sure if this is a Chrome bug, or just stems from not fully understanding when this event is fired, but this results in multiple offer SDPs
+  // and multiple answer SDPs being received, causing "harmless" error messages in the console. Screen sharing still seems to work though.
+  console.debug("handleRenegotiation() called!");
+  // Go through the list of participants and send each one a new SDP.
+  for (var pid in participantList) {
+    if (pid != "localVideo") {
+      var pc = participantList[pid].peerConnection;
+      pc.createOffer().then(function(offer) {
+        return pc.setLocalDescription(offer);
+      }).then(function() {
+        // Send this new offer to this participant.
+        sendSDP(pc.localDescription, pid);
+      }).catch(errorHandler);
     }
-    else{ // this should not happen(all STUN servers should be moved before this is executed) but you never know
-      this.iceServers.push(testIceServer)
-      this.turnServerTest()
-    }
-  },
-
-// this returns all known TURN servers including STUN []
-  getIceServers : function(){
-    var servers = []
-    for ( var i in this.iceServers ) {
-    var server = {}
-      server.urls = this.iceServers[i].urls
-      if ( typeof this.iceServers[i].credential != 'undefined' ) server.credential = this.iceServers[i].credential
-      if ( typeof this.iceServers[i].username != 'undefined' ) server.username = this.iceServers[i].username
-      if ( typeof this.iceServers[i].rtt != 'undefined' ) server.rtt = this.iceServers[i].rtt
-      servers.push(server)
-    }
-    return servers
-  },
-
-// this returns all known TURN servers []
-  getTurnServers : function(){
-    var servers = []
-    for ( var i in this.iceServers ) {
-      if ( this.iceServers[i].urls.indexOf('turn') != -1 ) {
-        var server = {}
-        server.urls = this.iceServers[i].urls
-        if ( typeof this.iceServers[i].credential != 'undefined' ) server.credential = this.iceServers[i].credential
-        if ( typeof this.iceServers[i].username != 'undefined' ) server.username = this.iceServers[i].username
-        if ( typeof this.iceServers[i].rtt != 'undefined' ) server.rtt = this.iceServers[i].rtt
-        servers.push(server)
-      }
-    }
-    return servers
-  },
-
-
-// this returns one UDP-TURN, one TCP-TURN and one STUN server []
-// , returned TURN servers are the ones with fastest measured round trip time
-  getFastestIceServers : function() {
-    var servers = []
-    // get one stunserver:
-    var i = 0
-    while ( ( this.iceServers[i].urls.indexOf('stun') == -1 ) && ( i < this.iceServers.length - 1 ) ) { i++ }
-    if ( i < this.iceServers.length ) servers.push(this.iceServers[i])
-    // and the fastest udp TURN server:
-    if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
-    // and the fastest tcp TURN server:
-    if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
-    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
-    return servers
-  },
-
-// this returns one UDP-TURN and one TCP-TURN server [], no STUN Server here included
-// returned TURN servers are the ones with fastest measured round trip time
-  getFastestTurnServers : function() {
-    var servers = []
-    // get the fastest udp TURN server:
-    if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
-    // and the fastest tcp TURN server:
-    if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
-    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
-    return servers
-  },
+  }
 }
 
 function mirrorMe () {
@@ -346,8 +433,9 @@ function mirrorMe () {
 
 function initSocket() {
   socket = io('https://' + document.domain + ':' + document.location.port);
-  socket.on('connection',function(socket){
+  socket.on('connect', () => {
     console.log('Socket connected!');
+    userPid = socket.id;
   });
   socket.on('restTURN',function(msg){
     if ( msg.restTURN != null ) {
@@ -375,14 +463,16 @@ function initSocket() {
   socket.on('sdp',function(msg){
     console.log('received sdp from',msg.pid,msg.turn);
     receivedDescription(msg)
+    sendName();
   });
   socket.on('iceCandidate',function(msg){
-    console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
+    // console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
     participantList[msg.pid].peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(errorHandler);
   });
   socket.on('participantReady',function(msg){
     console.log('got participantReady:',msg );
     callParticipant(msg);
+    $('#chatAudio')[0].play();
   });
   socket.on('bye',function(msg){
     console.log('got bye from:',msg.pid );
@@ -413,34 +503,94 @@ function initSocket() {
         console.log('torrent progress: ',torrent.progress,torrent.files[0].name,msg.pid)
       }.bind(msg))
     }.bind(msg))
-  })
+  });
+  socket.on('chat', function(msg) {
+    console.log('received chat from ', msg.pid, msg.chat);
+    appendChat(msg.chat);
+  });
+  socket.on('requestchat', function(msg) {
+    console.log('received request for chat history from ', msg.pid);
+    chatRequest(msg.pid);
+  });
+  socket.on('chathistory', function(msg) {
+    console.log('received chat history from ', msg.pid, msg.history.chatMessages);
+    receivedChatHistory(msg.history.chatMessages);
+  });
+  socket.on('name', function(msg) {
+    console.log('received name from ', msg.pid, msg.name);
+    receiveName(msg);
+  });
   window.onunload = function(){socket.emit('bye')};
 }
 
-function callParticipant(msg) {
-    participantList[msg.pid] = {};
-    participantList[msg.pid].peerConnectionConfig = {}
-    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+function createPeerConnection(pid,turn) {
+    console.log("Creating PeerConnection for pid: " + pid);
+    var peerConnectionConfig = {}
+    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+
+    /*
     if ( typeof(msg.turn) != 'undefined') {
-      participantList[msg.pid].turn=msg.turn;
-      participantList[msg.pid].peerConnectionConfig.iceServers = 
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
+      participantList[pid].turn=turn;
+      peerConnectionConfig.iceServers =
+        participantList[pid].turn.concat(peerConnectionConfig.iceServers)
     }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
+    */
+
+    if ( pid.indexOf('mirror') != -1 ) {
+      peerConnectionConfig.iceTransportPolicy = 'relay'
     }
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig);
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+
+    var pc = new RTCPeerConnection(peerConnectionConfig);
+    pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
+    pc.onaddstream = function (event){addStream(event.stream,pid)};
+    pc.onnegotiationneeded = handleRenegotiation;
+    return pc;
+}
+
+function callParticipant(msg) {
+    console.log("callParticipant with pid: " + msg.pid);
+    participantList[msg.pid] = {};
+    participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
     participantList[msg.pid].peerConnection.addStream(localStream);
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    // Create offer for target pid and then send through signalling.
+    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid,true)}).catch(errorHandler);
+}
+
+function receivedDescription(msg){
+  if(msg.sdp.type == 'offer') {
+    console.log("OFFER SDP received from pid: " + msg.pid);
+    // Create a PeerConnection object only if we don't already have one for this pid.
+    if (participantList[msg.pid] == undefined) {
+      participantList[msg.pid]={};
+      participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
+      if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
+        participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+        participantList[msg.pid].peerConnection.addStream(localStream)
+      } else {
+        // TODO: this is a ugly hack and should be handled somewhere else:
+        participantList[msg.pid].peerConnection.onaddstream = function (event){
+          replaceStream(event.stream,'localVideo')
+          document.getElementById("joinButton").classList.remove('hidden')
+        }
+      }
+    }
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
+    if (chatMessages.length === 0) {
+      socket.emit('requestchat', {'pid' : msg.pid});
+    }
+  }
+  else if (msg.sdp.type == 'answer') {
+    console.log("Received ANSWER SDP from pid: " + msg.pid);
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(errorHandler);
+  }
 }
 
 function deleteParticipant(pid){
   if (typeof(participantList[pid]) != 'undefined'){
     console.log('removing participant: ',pid)
     participantList[pid].peerConnection.close();
-    if ( typeof participantList[pid].videoDiv == 'object' ) { 
+    if ( typeof participantList[pid].videoDiv == 'object' ) {
       participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
     }
     delete participantList[pid];
@@ -450,47 +600,13 @@ function deleteParticipant(pid){
   }
 }
 
-function receivedDescription(msg){
-  if(msg.sdp.type == 'offer') {
-    participantList[msg.pid]={};
-    participantList[msg.pid].peerConnectionConfig = {}
-    participantList[msg.pid].peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
-    if ( typeof(msg.turn) != 'undefined' ) {
-      participantList[msg.pid].turn = msg.turn;
-      participantList[msg.pid].peerConnectionConfig.iceServers =
-        participantList[msg.pid].turn.concat(participantList[msg.pid].peerConnectionConfig.iceServers)
-    }
-    if ( msg.pid.indexOf('mirror') != -1 ) {
-      participantList[msg.pid].peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(participantList[msg.pid].peerConnectionConfig)
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
-      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-      participantList[msg.pid].peerConnection.addStream(localStream)
-    } else {
-      // TODO: this is a ugly hack and should be handled somewhere else:
-      participantList[msg.pid].peerConnection.onaddstream = function (event){
-        replaceStream(event.stream,'localVideo')
-        document.getElementById("joinButton").classList.remove('hidden')
-      }
-    }
-    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
-  }
-  else if (msg.sdp.type == 'answer') {
-    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-  }
-
-}
-
 function gotIceCandidate(candidate, pid) {
   if(candidate != null) {
-    console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
-    if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror 
+    // console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
+    if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror
       socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
     }
-    else { // candidates from mirroring set we directly ( but only relay candidates ) 
+    else { // candidates from mirroring set we directly ( but only relay candidates )
       if ( candidate.candidate.split("typ")[1].split(" ",2 )[1] == 'relay' )  {
         if (pid == 'mirrorReceiver') { pid = 'mirrorSender' }
         else { pid = 'mirrorReceiver' }
@@ -500,106 +616,116 @@ function gotIceCandidate(candidate, pid) {
   }
 }
 
-function createdDescription(description,pid) {
-  console.log('created localDescription sending to', pid);
-  var msg = {};
-  if ( description.type == 'offer' ){
-    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
-  }
+function createdDescription(description,pid,isOffer) {
+  console.log('Setting local ' + (isOffer ? 'OFFER' : 'ANSWER') + ' SDP and sending to ' + pid);
   participantList[pid].peerConnection.setLocalDescription(description).then(function() {
-	  msg.sdp = participantList[pid].peerConnection.localDescription
-	  msg.pid = pid
-    // mirroring description are not sent via signalling server but managed locally:
-    if ( pid.indexOf('mirror') == -1 ){ 
-      socket.emit('sdp',msg)
-      console.log('sending message:',msg)
-    } else {
-       // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
-      if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
-      else { msg.pid = 'mirrorReceiver' } 
-      receivedDescription(msg)
-    }
+    sendSDP(participantList[pid].peerConnection.localDescription, pid);
   }).catch(errorHandler)
 }
 
+function sendSDP(sdp, pid) {
+  console.log('Sending SDP to', pid);
+  var msg = {};
+  if ( sdp.type == 'offer' ){
+    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
+  }
+  msg.sdp = sdp
+  msg.pid = pid
+  // mirroring description are not sent via signalling server but managed locally:
+  if ( pid.indexOf('mirror') == -1 ){
+    socket.emit('sdp',msg)
+    console.log('sending message:',msg)
+  } else {
+     // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
+    if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
+    else { msg.pid = 'mirrorReceiver' }
+    receivedDescription(msg)
+  }
+}
 
-// this is about creating a video view for participant and 
+// this is about creating a video view for participant and
 // adding and activating video
 function addStream( stream, pid ) {
-  var videoDiv = {}
-  participantList[pid].mediaStream = stream;
-  var video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  if ( pid == "localVideo" ) {
-    video.muted = true;
-    videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
-    videoDiv.style.height = "100%";
-    video.style.cssText = "-moz-transform: scale(-1, 1); \
-      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
-      transform: scale(-1, 1); filter: FlipH;";
+  console.debug("*** addStream() called for pid: " + pid);
+  var videoDiv = document.getElementById(pid);
+  if (videoDiv) {
+    // Video element already exists for this pid, so just replace the source with the given stream.
+    replaceStream(stream, pid)
   } else {
-    videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
-    videoDiv.style.opacity = "0"; // invisible until layout is settled
+      var videoDiv = {}
+      participantList[pid].mediaStream = stream;
+      var video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      if ( pid == "localVideo" ) {
+        video.muted = true;
+        videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
+        videoDiv.style.height = "100%";
+        video.style.cssText = "-moz-transform: scale(-1, 1); \
+          -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+          transform: scale(-1, 1); filter: FlipH;";
+      } else {
+        videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
+        videoDiv.style.opacity = "0"; // invisible until layout is settled
+      }
+      videoDiv.appendChild(video);
+      var progressBarDiv = document.createElement('div')
+      progressBarDiv.classList.add('overlayBottom','hidden')
+      var progressBar = new ProgressBar.Line(progressBarDiv, {
+        strokeWidth: 5,
+        easing: 'easeInOut',
+        duration: 100,
+        color: '#FFEA82',
+        trailColor: '#eee',
+        trailWidth: 1,
+        svgStyle: {width: '85%'},
+        text: {
+          style: {
+            // Text color.
+            // Default: same as stroke color (options.color)
+            color: '#fff',
+            position: 'absolute',
+            // display:'block',
+            right: '0px',
+            // bottom: '0px',
+            width:'15%',
+            padding: '2px',
+            margin: '2px',
+            top: '50%',
+            transform: 'translate(0,-50%)',
+          },
+          autoStyleContainer: false
+        },
+        from: {color: '#FFEA82'},
+        to: {color: '#ED6A5A'},
+        step: (state, bar) => {
+          bar.setText(Math.round(bar.value() * 100) + ' %')
+        }
+      })
+      participantList[pid].progressBar = progressBar
+      videoDiv.appendChild(progressBarDiv)
+      var lastVideoDiv = videoContainer.lastElementChild;
+      videoContainer.appendChild(videoDiv);
+      videoDiv.addEventListener("drop",drop);
+      videoDiv.addEventListener("dragstart",dragStart);
+      videoDiv.addEventListener("dragover",allowDrop);
+      videoDiv.addEventListener("dragend", dragEnd);
+      videoDiv.addEventListener("dragleave", dragLeave);
+      videoDiv.addEventListener("dragenter", dragEnter);
+      videoDiv.draggable="true";
+      videoDiv.id = pid;
+      participantList[pid].videoDiv = videoDiv;
+      if ( lastVideoDiv ) {
+        videoDiv.style.height =  lastVideoDiv.style.height;
+      }
+      videoDiv.classList.remove('hidden');
+      fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
   }
-  videoDiv.appendChild(video);
-  var progressBarDiv = document.createElement('div')
-  progressBarDiv.classList.add('overlayBottom','hidden')
-  var progressBar = new ProgressBar.Line(progressBarDiv, {
-    strokeWidth: 5,
-    easing: 'easeInOut',
-    duration: 100,
-    color: '#FFEA82',
-    trailColor: '#eee',
-    trailWidth: 1,
-    svgStyle: {width: '85%'},
-    text: {
-      style: {
-        // Text color.
-        // Default: same as stroke color (options.color)
-        color: '#fff',
-        position: 'absolute',
-//        display:'block',
-        right: '0px',
-//        bottom: '0px',
-        width:'15%',
-        padding: '2px',
-        margin: '2px',
-        top: '50%',
-        transform: 'translate(0,-50%)',
-      },
-      autoStyleContainer: false
-    },
-    from: {color: '#FFEA82'},
-    to: {color: '#ED6A5A'},
-    step: (state, bar) => {
-      bar.setText(Math.round(bar.value() * 100) + ' %')
-    }
-  })
-  participantList[pid].progressBar = progressBar
-  videoDiv.appendChild(progressBarDiv)
-  var lastVideoDiv = videoContainer.lastElementChild;
-  videoContainer.appendChild(videoDiv);
-  videoDiv.addEventListener("drop",drop);
-  videoDiv.addEventListener("dragstart",dragStart);
-  videoDiv.addEventListener("dragover",allowDrop);
-  videoDiv.addEventListener("dragend", dragEnd);
-  videoDiv.addEventListener("dragleave", dragLeave);
-  videoDiv.addEventListener("dragenter", dragEnter);
-  videoDiv.draggable="true";
-  videoDiv.id = pid;
-  participantList[pid].videoDiv = videoDiv;
-  if ( lastVideoDiv ) {
-    videoDiv.style.height =  lastVideoDiv.style.height;
-  }
-  videoDiv.classList.remove('hidden');
-  fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
 }
 
 function replaceStream( stream, pid ) {
   document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream
 }
-
 
 function forceRedraw (element){
   var disp = element.style.display;
@@ -696,6 +822,16 @@ function toggleFullScreen() {
       fullscreenIcon.classList.remove('hidden');
       exitFullscreenIcon.classList.add('hidden');
     }
+  }
+}
+
+function toggleScreenshare() {
+  if (!screensharing) {
+    // Currently using the camera, so switch to the screen.
+    getScreen();
+  } else {
+    // Currently sharing the screen, so switch to camera.
+    getCam();
   }
 }
 
@@ -829,6 +965,7 @@ function drop(ev) {
     document.getElementById(data).getElementsByTagName("video")[0].play();
     document.getElementById(data).style.opacity = "1";
 }
+
 function fadeOutElements(pid) {
   $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
   participantList[pid].hidingElementsStatus = "hidden"
@@ -841,7 +978,7 @@ function fadeInElements(pid) {
 }
 
 function onMouseMoveAction(pid) {
-  console.log(pid);
+  // console.log(pid);
   if ( participantList[pid].hidingElementsStatus === "hidden" ) {
     fadeInElements(pid);
   }
@@ -854,17 +991,15 @@ function toggleStickyness(pid) {
   $("#stickyButton").toggleClass("black");
 }
 
-
-
 function errorHandler(error) {
-    console.log(error);
+    console.error(error);
 }
 
 function joinRoom(){
   socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
   document.getElementById('joinButton').classList.add('hidden')
   document.getElementById('localMessage').classList.add('hidden')
-  document.getElementById('localTopLeft').appendChild(document.getElementById('audioIndicator'))
+  document.getElementById('localTopCenter').insertBefore(document.getElementById('audioIndicator'),document.getElementById('localTopCenter').childNodes[0])
   replaceStream(localStream,'localVideo')
   deleteParticipant('mirrorReceiver')
   deleteParticipant('mirrorSender')
@@ -899,7 +1034,7 @@ var progressBarManager = {
     document.getElementById('globalMessage').classList.remove('hidden')
     this.progressBar.animate(progress)
     if ( progress > 0.99999999 ) {
-      fadeOut(document.getElementById('globalMessage'))     
+      fadeOut(document.getElementById('globalMessage'))
     }
   },
 }
@@ -954,36 +1089,42 @@ function audioAnalyser(stream) {
     var averagePercent = average / maxAudioLvl
     var audioIndicator = document.getElementById('audioIndicator')
     audioIndicator.style.opacity = averagePercent
-    if ( averagePercent > 0.25 ) { 
-      if ( averagePercent > 0.8 ) { 
-        audioIndicator.style.color = 'red' 
-      } 
-      else { 
-        audioIndicator.style.color = 'yellow' 
-        speakerDetected = true 
+    if ( averagePercent > 0.25 ) {
+      if ( averagePercent > 0.8 ) {
+        audioIndicator.style.color = 'red'
       }
-    } 
-    else { 
-      audioIndicator.style.color = null
-      speakerDetected = false 
+      else {
+        audioIndicator.style.color = 'yellow'
+        speakerDetected = true
+      }
     }
-  } 
+    else {
+      audioIndicator.style.color = null
+      speakerDetected = false
+    }
+  }
 }
 
 function getScreen(){
   var constraints = {
-    audio: false,
+    audio: true,
     video: { mediaSource: "screen" }
   };
 
-  // get camera and mic:
-  if(navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+  if(adapter.browserDetails.browser === 'chrome') {
+    // Chrome 34+ requires an extension
+    var pending = window.setTimeout(function () {
+      alert('The required Chrome extension is not installed. To install it, go to https://chrome.google.com/webstore/detail/janus-webrtc-screensharin/hapfgfdkleiggjjpfpenajgdnfckjpaj (you might have to reload the page afterwards).');
+    }, 1000);
+    window.postMessage({ type: 'janusGetScreen', id: pending }, '*');
   } else {
+    if(navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+    } else {
       alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+    }
   }
 }
-
 
 function getCam(){
   var constraints = {
@@ -1003,6 +1144,59 @@ function getCam(){
 }
 
 function pageReady() {
+  // JQuery GUI stuff
+  $('#chat header').on('click', function() {
+    if (chatHidden) { // Clicked on hidden chat
+      $('.chat').slideToggle(300, 'swing');
+      $('.chat-message-counter').fadeOut(300, 'swing');
+      chatHidden = false;
+      unreadMessages = 0;
+      notificationHidden = true;
+    } else { // Clicked on open chat
+      $('.chat').slideToggle(300, 'swing');
+      // $('.chat-message-counter').fadeToggle(300, 'swing');
+
+      chatHidden = true;
+      unreadMessages = 0;
+      notificationHidden = true;
+    }
+  });
+
+  $('.chat').slideToggle(0);
+  // $('.chat-message-counter').fadeToggle(0, 'swing');;
+
+  // appending HTML5 Audio Tag in HTML Body
+  $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
+
+  // Editable name tag
+  $(document).on("click", ".nametag", function() {
+    var original_text = $(this).text();
+    var new_input = $("<input class=\"nameeditor\"/>");
+    if (original_text != "Enter name...") {
+      new_input.val(original_text);
+    }
+    $(this).replaceWith(new_input);
+    new_input.focus();
+  });
+
+  $(document).on("blur", ".nameeditor", function() {
+    var new_input = $(this).val();
+    var updated_text = $("<span class=\"nametag\">");
+    if (new_input.trim() == "") {
+      userName = "";
+      updated_text.text("Enter name...");
+    } else {
+      userName = new_input;
+      updated_text.text(new_input);
+    }
+
+    sendName();
+
+    $(this).replaceWith(updated_text);
+  });
+
+  // End JQuery GUI stuff
+
   // getting some HTML-elements we need later and roomname:
   room = document.URL.split("/")[3];
   localVideo = document.getElementById('localVideo');
@@ -1022,7 +1216,7 @@ function pageReady() {
     })
   })
 
-  
+
   progressBarManager.init()
 
   // move initially configured ICE servers to testing before we use them
@@ -1032,10 +1226,156 @@ function pageReady() {
           progressBarManager.updateProgress.bind(progressBarManager))
   }
   setGlobalMessage('Initializing...')
-  initSocket()  
+  initSocket()
 
   window.addEventListener('resize', redrawVideoContainer);
   window.setTimeout(checkVideoContainer, 2500);
 }
 
 
+if (adapter.browserDetails.browser === 'chrome') {
+  // Listen for events from the Chrome extension used for screensharing.
+  // Code from Janus project (Copyright (c) 2016 Meetecho)
+  window.addEventListener('message', function (event) {
+    if(event.origin != window.location.origin)
+      return;
+    if (event.data.type == 'janusGotScreen') {
+      if (event.data.sourceId === '') {
+        // user canceled
+        console.log('You cancelled the request for permission, giving up...');
+      } else {
+        var constraints = {
+          audio: false,             // Chrome currently does not support retrieving the microphone with the screen
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              maxWidth: window.screen.width,
+              maxHeight: window.screen.height,
+              maxFrameRate: 3
+            },
+            optional: [
+              {googTemporalLayeredScreencast: true}
+            ]
+          }
+        };
+
+        constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
+        // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
+        navigator.mediaDevices.getUserMedia(constraints).then(getChromeScreenSuccess).catch(errorHandler);
+      }
+    } else if (event.data.type == 'janusGetScreenPending') {
+        window.clearTimeout(event.data.id);
+    }
+  });
+}
+
+/* Chat */
+
+// Chat message submitted
+function chatMessage() {
+  var form = document.getElementById('chat-form');
+  var messageText = form.elements['message'].value;
+
+  // Empty name for now
+  var msg = {pid: userPid, name : userName, time : Date.now(), message : messageText};
+
+  chatMessages.push(msg);
+
+  sendChat(msg);
+  appendChat(msg);
+
+  form.reset();
+
+  return false; // Return false to disable normal form submition
+}
+
+function receiveChat(msg) {
+  chatMessages.push(msg);
+
+  appendChat(msg);
+}
+
+function receivedChatHistory(history) {
+  if (chatMessages.length === 0) {
+    for (var chat in history) {
+      receiveChat(history[chat]);
+    }
+  }
+}
+
+function chatRequest(pid) {
+  socket.emit('chathistory', {'history' : { chatMessages }, 'pid' : pid});
+}
+
+/*
+
+msg = {"name" : "displayname", "time" : "timestamp", "message" : "messagetext"}
+
+<div class="chat-message clearfix">
+  <div class="chat-message-content clearfix">
+    <span class="chat-time">13:35</span>
+    <h5>John Doe</h5>
+    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Error,
+      explicabo quasi ratione odio dolorum harum.</p>
+  </div> <!-- end chat-message-content -->
+</div> <!-- end chat-message -->
+<hr>
+
+*/
+
+// Chat appended to history
+function appendChat(msg) {
+  var chatHistory = document.getElementById('chat-history');
+
+  var chatText = document.createElement('p');
+  chatText.appendChild(document.createTextNode(msg.message));
+
+  var chatName = document.createElement('h5');
+  chatName.appendChild(document.createTextNode(msg.name));
+
+  var time = new Date(msg.time);
+  var chatTime = document.createElement('span');
+  chatTime.className = 'chat-time';
+  chatTime.appendChild(document.createTextNode((time.getHours() < 10 ? '0' : '') + time.getHours() + ':' + (time.getMinutes() < 10 ? '0' : '') + time.getMinutes()));
+
+  var chatMessageContent = document.createElement('div');
+  chatMessageContent.className = 'chat-message-content clearfix';
+  chatMessageContent.appendChild(chatTime);
+  chatMessageContent.appendChild(chatName);
+  chatMessageContent.appendChild(chatText);
+
+  var chatMessage = document.createElement('div');
+  chatMessage.className = 'chat-message clearfix';
+  chatMessage.appendChild(chatMessageContent);
+
+  chatHistory.appendChild(chatMessage);
+  chatHistory.appendChild(document.createElement('hr'));
+
+  chatHistory.scrollTop = chatHistory.scrollHeight - chatHistory.clientHeight;
+
+  if (chatHidden) { // Update unread count and show notification if hidden
+    unreadMessages++;
+    var unreadCounter = document.getElementById('chat-message-counter');
+    unreadCounter.innerHTML = unreadMessages;
+
+    if (notificationHidden) {
+      $('#chatAudio')[0].play();
+      $('.chat-message-counter').fadeIn(300, 'swing');
+      notificationHidden = false;
+    }
+  }
+}
+
+function sendName() {
+  socket.emit('name', userName);
+}
+
+function sendChat(msg) {
+  socket.emit('chat', msg);
+}
+
+// msg = {pid: pid, name: name}
+function receiveName(msg) {
+  var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
+  nameholder.innerHTML = msg.name;
+}

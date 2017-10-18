@@ -2,20 +2,21 @@
 <html>
     <head>
         <link rel="stylesheet" href="bootstrap/dist/css/bootstrap.min.css">
+        <script src="jquery/dist/jquery.min.js"></script>
         <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
         <script src="/socket.io/socket.io.js"></script>
-        <script src="scripts/app.js"></script>
-        <script src="jquery/dist/jquery.min.js"></script>
         <script src="bootstrap/dist/js/bootstrap.min.js"></script>
         <script src="progressbar.js/dist/progressbar.min.js"></script>
 	      <script src="client-config.js"></script>
         <script src="webtorrent/webtorrent.min.js"></script>
         <script src="drag-drop/dragdrop.min.js"></script>
+        <script src="scripts/app.js"></script>
 	<link rel="stylesheet" type="text/css" href="css/all.css">
         <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport' />
     </head>
 
     <body>
+      <img class="logo tohide" src="css/logo.svg" viewbox="0 0 50 10"></img>
       <div id="globalMessage" class="hidden">
         <div id="globalMessageText">
           <p id="globalMessageTextField"></p>
@@ -66,6 +67,9 @@
             arrow_drop_up
           </span>
         </div>
+        <div id="remoteTopCenter" class="overlayTopCenter fadeOutElements">
+          <span class="remotenametag">No name</span>
+        </div>
       </div>
       <div id="localVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
         onmousemove="onMouseMoveAction(event.currentTarget.id)">
@@ -86,12 +90,17 @@
             onclick="muteAudio(event.target.parentElement.parentElement.id)">
             mic
           </span>
+          <span id="screenshareIcon" class="screenshareIcon material-icons md-light"
+            onclick="toggleScreenshare(event.target.parentElement.parentElement.id)">
+            screen_share
+          </span>
           <span class="bigVideoIcon material-icons md-light"
             onclick="setBigVideo(event.target.parentElement.parentElement.id)">
             arrow_drop_up
           </span>
         </div>
-        <div id="localTopLeft" class="overlayTopLeft">
+        <div id="localTopCenter" class="overlayTopCenter fadeOutElements">
+          <span class="nametag">Enter name...</span>
         </div>
         <div id="localMessage" class="overlayMiddleCenter">
           <span id="joinButton" class="hidden">
@@ -103,6 +112,26 @@
           </span>
         </div>
       </div>
+
+      <div id="chat">
+        <header class="clearfix">
+          <h4>Chat</h4>
+          <span id="chat-message-counter" class="chat-message-counter">0</span>
+        </header>
+        <div class="chat">
+
+          <div id="chat-history" class="chat-history">
+          </div> <!-- end chat-history -->
+
+          <!-- <p class="chat-feedback">Your partner is typing…</p> -->
+
+          <form id="chat-form" onSubmit="return chatMessage()">
+            <fieldset>
+              <input type="text" name="message" autocomplete="off" placeholder="Type your message…" autofocus><input type="hidden">
+            </fieldset>
+          </form>
+        </div> <!-- end chat -->
+      </div> <!-- end live-chat -->
 
       <script type="text/javascript">
         window.onload = pageReady;

@@ -2,7 +2,23 @@ body {
   margin: 0;
   padding: 0;
   border: 0;
-  background-color: transparent; }
+  background-color: transparent;
+  background-image: url("background.svg");
+  background-repeat: no-repeat;
+  background-size: 100% 100%; }
+
+.logo {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  height: 8vh;
+  z-index: 0; }
+
+.logoStartscreen {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  height: 8vh; }
 
 #videoDivWrapper {
   height: 85vh;
@@ -14,7 +30,7 @@ body {
   border: 0;
   margin: 0;
   top: 50%;
-  transform: translate(0%, -50%);
+  transform: translate(0%, -45%);
   pointer-events: none; }
 
 #videoContainer {
@@ -27,7 +43,7 @@ body {
   pointer-events: auto; }
 
 .videoDiv {
-  padding: 2px;
+  padding: 3px;
   border: 0;
   margin: 0;
   position: relative;
@@ -36,86 +52,90 @@ body {
   display: inline-block;
   height: 100%; }
 
+#audioIndicator {
+  vertical-align: middle;
+  padding: 3px;
+  font-size: 3.2vmin; }
+
 video {
   height: 100%;
   padding: 0;
   border: 0;
   margin: 0;
-  border-radius: 7px; }
+  box-shadow: 0px 0px 10px 2px #000000;
+  z-index: 10; }
+
+:-webkit-full-screen .tohide {
+  display: none; }
+
+:-moz-full-screen .tohide {
+  display: none; }
+
+:-ms-fullscreen .tohide {
+  display: none; }
+
+:fullscreen .tohide {
+  display: none; }
+
+.overlayTopCenter:hover,
+.overlayBottom:hover,
+.overlayMiddleCenter:hover,
+.overlayBottomLeft:hover,
+.overlayBottomRight:hover,
+.overlayTopLeft:hover,
+.overlayTopRight:hover {
+  background: rgba(0, 0, 0, 0.7); }
+
+.overlayTopCenter,
+.overlayBottom,
+.overlayMiddleCenter,
+.overlayBottomLeft,
+.overlayBottomRight,
+.overlayTopLeft,
+.overlayTopRight {
+  position: absolute;
+  vertical-align: middle;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  font-size: 4.5vmin;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.2); }
 
 .overlayTopRight {
   z-index: 99;
-  right: 2px;
-  top: 2px;
-  background-color: rgba(100, 100, 100, 0.3);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex;
+  right: 3px;
+  top: 3px;
   cursor: pointer; }
 
 .overlayTopLeft {
   z-index: 99;
-  top: 2px;
-  left: 2px;
-  color: rgba(255, 255, 255, 0.8);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  top: 3px;
+  left: 3px; }
+
+.overlayTopCenter {
+  z-index: 99;
+  top: 3px;
+  left: 50%;
+  font-size: 3.5vmin;
+  transform: translate(-50%, 0); }
 
 .overlayBottomRight {
-  bottom: 2px;
-  right: 2px;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  bottom: 3px;
+  right: 3px; }
 
 .overlayBottomLeft {
-  bottom: 2px;
-  left: 2px;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex; }
+  bottom: 3px;
+  left: 3px; }
 
 .overlayMiddleCenter {
   z-index: 99;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex;
   bottom: 10%;
   left: 50%;
   transform: translate(-50%, 0%); }
 
 .overlayBottom {
   z-index: 99;
-  color: rgba(255, 255, 255, 0.8);
-  background-color: rgba(150, 150, 150, 0.4);
-  position: absolute;
-  font-size: 4.5vh;
-  vertical-align: middle;
-  padding: 4px;
-  border-radius: 7px;
-  display: flex;
   bottom: 0%;
   left: 50%;
   transform: translate(-50%, 0%);
@@ -166,10 +186,148 @@ video {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  position: fixed;
   z-index: -1; }
 
 #bigVideoContainer video {
   object-fit: cover;
   width: 100%;
   height: 100%; }
+
+/* Source selector */
+/* Name tag */
+.nameeditor {
+  border: none;
+  background: #ddd;
+  color: #000;
+  font-size: 3.5vmin;
+  font-family: arial;
+  width: 10vw;
+  cursor: text; }
+
+/* Chat CSS */
+hr {
+  background: #e9e9e9;
+  border: 0;
+  -moz-box-sizing: content-box;
+  box-sizing: content-box;
+  height: 1px;
+  margin: 0;
+  min-height: 1px; }
+
+input {
+  border: 0;
+  color: inherit;
+  font-family: inherit;
+  font-size: 100%;
+  line-height: normal;
+  margin: 0; }
+
+p {
+  margin: 0; }
+
+.clearfix {
+  *zoom: 1; }
+
+/* For IE 6/7 */
+.clearfix:before, .clearfix:after {
+  content: "";
+  display: table; }
+
+.clearfix:after {
+  clear: both; }
+
+#chat {
+  bottom: 0;
+  font-size: 1.4vmin;
+  right: 1.2vw;
+  position: fixed;
+  width: 17vw; }
+
+#chat header {
+  background: #293239;
+  border-radius: 5px 5px 0 0;
+  color: #fff;
+  cursor: pointer;
+  padding: 1vh 1vw; }
+
+#chat h4:before {
+  background: #1a8a34;
+  border-radius: 50%;
+  content: "";
+  display: inline-block;
+  height: 8px;
+  margin: 0 8px 0 0;
+  width: 8px; }
+
+#chat h4 {
+  font-size: 1.4vmin; }
+
+#chat h5 {
+  font-size: 1.3vmin; }
+
+#chat form {
+  padding: 0.5vmin; }
+
+#chat input[type="text"] {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 4px;
+  outline: none;
+  width: 16vw; }
+
+.chat-message-counter {
+  background: #e62727;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  display: none;
+  font-size: 1.2vmin;
+  font-weight: bold;
+  height: 3vmin;
+  left: 0;
+  line-height: 3vmin;
+  margin: -1.5vmin 0 0 -1.5vmin;
+  position: absolute;
+  text-align: center;
+  top: 0;
+  width: 3vmin; }
+
+/*.chat-close {
+	background: #1b2126;
+	border-radius: 50%;
+	color: #fff;
+	display: block;
+	float: right;
+	font-size: 10px;
+	height: 16px;
+	line-height: 16px;
+	margin: 10px 0 0 0;
+	text-align: center;
+	width: 16px;
+} */
+.chat {
+  background: #fff; }
+
+.chat-history {
+  height: 25vh;
+  padding: 0.8vh 1vw;
+  overflow-y: scroll; }
+
+.chat-message {
+  margin: 0.5vw 0; }
+
+/* .chat-message img {
+	border-radius: 50%;
+	float: left;
+}
+
+.chat-message-content {
+	margin-left: 56px;
+} */
+.chat-time {
+  float: right;
+  font-size: 1vmin; }
+
+/* .chat-feedback {
+	font-style: italic;
+	margin: 0 0 0 80px;
+} */

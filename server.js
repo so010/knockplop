@@ -24,6 +24,7 @@ app.use('/pix',express.static(__dirname + '/pix'));
 app.use('/scripts',express.static(__dirname + '/dist/scripts'));
 app.use('/css',express.static(__dirname + '/dist/css'));
 app.use('/client-config.js',express.static(__dirname + '/client-config.js'));
+app.use('/',express.static(__dirname + '/google_verify'))
 app.get('/', function (req, res) {
    console.log(req.url);
    res.sendFile(__dirname + '/' + 'dist/chooseRoom.html');
@@ -95,8 +96,23 @@ io.on('connection', function(socket) {
   socket.on('magnetURI', function(msg) {
     console.log('client disconnected: %s in room: ', socket.id, socket.room );
     socket.broadcast.to(socket.room).emit('magnetURI',{'pid':socket.id,'magnetURI':msg} );
-  })
-
+  });
+  socket.on('chat', function(msg) {
+    console.log('received chat message: from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(socket.room).emit('chat', {'pid':socket.id, 'chat':msg} );
+  });
+  socket.on('requestchat', function(msg) {
+    console.log('received request for chat history : from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(msg.pid).emit('requestchat', {'pid' : socket.id} );
+  });
+  socket.on('chathistory', function(msg) {
+    console.log('received chat history : from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(msg.pid).emit('chathistory', {'pid' : socket.id, 'history' : msg.history} );
+  });
+  socket.on('name', function(msg) {
+    console.log('received name: from %s in room: ', socket.id, socket.room );
+    socket.broadcast.to(socket.room).emit('name', {'pid':socket.id, 'name':msg} );
+  });
 });
 
 
