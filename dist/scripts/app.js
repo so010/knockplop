@@ -999,7 +999,7 @@ function joinRoom(){
   socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
   document.getElementById('joinButton').classList.add('hidden')
   document.getElementById('localMessage').classList.add('hidden')
-  document.getElementById('localTopCenter').insertBefore(document.getElementById('audioIndicator'),document.getElementById('localTopCenter').childNodes[0])
+  document.getElementById('localTopLeft').insertBefore(document.getElementById('audioIndicator'),document.getElementById('localTopLeft').childNodes[0])
   replaceStream(localStream,'localVideo')
   deleteParticipant('mirrorReceiver')
   deleteParticipant('mirrorSender')
@@ -1169,19 +1169,28 @@ function pageReady() {
   $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
 
   // Editable name tag
-  $(document).on("click", ".nametag", function() {
+  $(document).on("click", "#nametag", function() {
     var original_text = $(this).text();
+    document.getElementById('localTopCenter').classList.remove('fadeOutElements')
     var new_input = $("<input class=\"nameeditor\"/>");
     if (original_text != "Enter name...") {
       new_input.val(original_text);
     }
     $(this).replaceWith(new_input);
     new_input.focus();
+    new_input.keypress( function(e) {
+      let key = e.keyCode
+      if (key == 13) {
+        $(this).blur()
+        return false;
+      }
+    });
   });
 
   $(document).on("blur", ".nameeditor", function() {
     var new_input = $(this).val();
-    var updated_text = $("<span class=\"nametag\">");
+    document.getElementById('localTopCenter').classList.add('fadeOutElements')
+    var updated_text = $("<span id=\"nametag\">");
     if (new_input.trim() == "") {
       userName = "";
       updated_text.text("Enter name...");
@@ -1189,9 +1198,7 @@ function pageReady() {
       userName = new_input;
       updated_text.text(new_input);
     }
-
     sendName();
-
     $(this).replaceWith(updated_text);
   });
 
@@ -1245,7 +1252,7 @@ if (adapter.browserDetails.browser === 'chrome') {
         console.log('You cancelled the request for permission, giving up...');
       } else {
         var constraints = {
-          audio: false,             // Chrome currently does not support retrieving the microphone with the screen
+          audio: false,             // Chrome currently does not support retrieving the one with the screen
           video: {
             mandatory: {
               chromeMediaSource: 'desktop',
