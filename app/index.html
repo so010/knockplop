@@ -73,6 +73,8 @@
       </div>
       <div id="localVideoDiv" hidden="true" class="hidden videoDiv" draggable="true"
         onmousemove="onMouseMoveAction(event.currentTarget.id)">
+        <div id="localTopLeft" class="overlayTopLeft">
+        </div>
         <div class="overlayTopRight fadeOutElements">
           <span class="videoMuteIcon material-icons md-light hidden"
             onclick="unMuteVideo(event.target.parentElement.parentElement.id)">
@@ -100,7 +102,7 @@
           </span>
         </div>
         <div id="localTopCenter" class="overlayTopCenter fadeOutElements">
-          <span class="nametag">Enter name...</span>
+          <span id="nametag">Enter name...</span>
         </div>
         <div id="localMessage" class="overlayMiddleCenter">
           <span id="joinButton" class="hidden">
