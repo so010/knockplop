@@ -101,8 +101,18 @@
         <span class="videoMuteIcon material-icons md-light hidden" onclick="unMuteLocalVideo()">videocam_off</span>
         <span class="videoUnMuteIcon material-icons md-light" onclick="muteLocalVideo()">videocam</span>
         <span class="leaveRoomIcon material-icons">call_end</span>
-        <span class="screenshareIcon material-icons md-light" onclick="toggleScreenshare()">screen_share</span>
+        <span id="screenshareIcon" class="screenshareIcon material-icons md-light" onclick="toggleScreenshare()">screen_share</span>
         <span class="settingsIcon material-icons md-light" onclick="showSettings()">settings</span>
+      </div>
+
+      <div id="settingsWrapper" class="hidden">
+        <div id="settings">
+          <span id="saveSettingsButton">
+            <button class="button" type="button" onclick="saveSettings()">
+              Save
+            </button>
+          </span>
+        </div>
       </div>
 
       <div id="chat">
