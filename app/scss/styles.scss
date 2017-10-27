@@ -376,3 +376,36 @@ p { margin: 0; }
 	font-style: italic;
 	margin: 0 0 0 80px;
 } */
+
+
+
+/* Global controls */
+
+#global-controls {
+  z-index: 100;
+  bottom: 1vh;
+  left: 50%;
+  transform: translateX(-50%);
+  /* margin-left: auto; */
+  /* margin-right: auto; */
+  font-size: 4.5vmin;
+  background: rgba(0, 0, 0, 0.7);
+  vertical-align: middle;
+  display: flex;
+  color: rgba(255, 255, 255, 1.0);
+  position: absolute;
+  cursor: pointer;
+}
+
+#global-controls span {
+    padding: 10px;
+}
+
+#global-controls span:hover {
+  // box-shadow: .4ex .4ex 3em #666;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.leaveRoomIcon {
+    color: red;
+}

@@ -76,26 +76,6 @@
         <div id="localTopLeft" class="overlayTopLeft">
         </div>
         <div class="overlayTopRight fadeOutElements">
-          <span class="videoMuteIcon material-icons md-light hidden"
-            onclick="unMuteVideo(event.target.parentElement.parentElement.id)">
-            videocam_off
-          </span>
-          <span class="videoUnMuteIcon material-icons md-light"
-            onclick="muteVideo(event.target.parentElement.parentElement.id)">
-            videocam
-          </span>
-          <span class="audioMuteIcon material-icons md-light hidden"
-            onclick="unMuteAudio(event.target.parentElement.parentElement.id)">
-            mic_off
-          </span>
-          <span class="audioUnMuteIcon material-icons md-light"
-            onclick="muteAudio(event.target.parentElement.parentElement.id)">
-            mic
-          </span>
-          <span id="screenshareIcon" class="screenshareIcon material-icons md-light"
-            onclick="toggleScreenshare(event.target.parentElement.parentElement.id)">
-            screen_share
-          </span>
           <span class="bigVideoIcon material-icons md-light"
             onclick="setBigVideo(event.target.parentElement.parentElement.id)">
             arrow_drop_up
@@ -113,6 +93,16 @@
             </button>
           </span>
         </div>
+      </div>
+
+      <div id="global-controls">
+        <span class="audioMuteIcon material-icons md-light hidden" onclick="unMuteLocalAudio()">mic_off</span>
+        <span class="audioUnMuteIcon material-icons md-light" onclick="muteLocalAudio()">mic</span>
+        <span class="videoMuteIcon material-icons md-light hidden" onclick="unMuteLocalVideo()">videocam_off</span>
+        <span class="videoUnMuteIcon material-icons md-light" onclick="muteLocalVideo()">videocam</span>
+        <span class="leaveRoomIcon material-icons">call_end</span>
+        <span class="screenshareIcon material-icons md-light" onclick="toggleScreenshare()">screen_share</span>
+        <span class="settingsIcon material-icons md-light" onclick="showSettings()">settings</span>
       </div>
 
       <div id="chat">
