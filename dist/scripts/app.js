@@ -734,6 +734,38 @@ function forceRedraw (element){
   element.style.display = disp;
 };
 
+function muteLocalAudio() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('audioMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('audioUnMuteIcon')[0];
+  muteIcon.classList.remove('hidden');
+  unMuteIcon.classList.add('hidden');
+  muteAudio('localVideo');
+}
+
+function unMuteLocalAudio() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('audioMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('audioUnMuteIcon')[0];
+  muteIcon.classList.add('hidden');
+  unMuteIcon.classList.remove('hidden');
+  unMuteAudio('localVideo');
+}
+
+function muteLocalVideo() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('videoMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('videoUnMuteIcon')[0];
+  muteIcon.classList.remove('hidden');
+  unMuteIcon.classList.add('hidden');
+  muteVideo('localVideo');
+}
+
+function unMuteLocalVideo() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('videoMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('videoUnMuteIcon')[0];
+  muteIcon.classList.add('hidden');
+  unMuteIcon.classList.remove('hidden');
+  unMuteVideo('localVideo');
+}
+
 function muteAudio(pid){
   var muteIcon = document.getElementById(pid).getElementsByClassName('audioMuteIcon')[0];
   var unMuteIcon = document.getElementById(pid).getElementsByClassName('audioUnMuteIcon')[0];
