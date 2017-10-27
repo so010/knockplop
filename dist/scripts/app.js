@@ -737,33 +737,33 @@ function forceRedraw (element){
 function muteLocalAudio() {
   var muteIcon = document.getElementById('global-controls').getElementsByClassName('audioMuteIcon')[0];
   var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('audioUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getAudioTracks()[0].enabled = false;
   muteIcon.classList.remove('hidden');
   unMuteIcon.classList.add('hidden');
-  muteAudio('localVideo');
 }
 
 function unMuteLocalAudio() {
   var muteIcon = document.getElementById('global-controls').getElementsByClassName('audioMuteIcon')[0];
   var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('audioUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getAudioTracks()[0].enabled = true;
   muteIcon.classList.add('hidden');
   unMuteIcon.classList.remove('hidden');
-  unMuteAudio('localVideo');
 }
 
 function muteLocalVideo() {
   var muteIcon = document.getElementById('global-controls').getElementsByClassName('videoMuteIcon')[0];
   var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('videoUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getVideoTracks()[0].enabled = false;
   muteIcon.classList.remove('hidden');
   unMuteIcon.classList.add('hidden');
-  muteVideo('localVideo');
 }
 
 function unMuteLocalVideo() {
   var muteIcon = document.getElementById('global-controls').getElementsByClassName('videoMuteIcon')[0];
   var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('videoUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getVideoTracks()[0].enabled = true;
   muteIcon.classList.add('hidden');
   unMuteIcon.classList.remove('hidden');
-  unMuteVideo('localVideo');
 }
 
 function muteAudio(pid){
@@ -855,6 +855,14 @@ function toggleFullScreen() {
       exitFullscreenIcon.classList.add('hidden');
     }
   }
+}
+
+function showSettings() {
+  document.getElementById('settingsWrapper').classList.remove('hidden');
+}
+
+function saveSettings() {
+  document.getElementById('settingsWrapper').classList.add('hidden');
 }
 
 function toggleScreenshare() {
