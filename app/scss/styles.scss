@@ -430,4 +430,59 @@ p { margin: 0; }
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+  padding: 20px;
+}
+
+#saveSettingsButton {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+}
+
+.mediasource {
+  width:100%;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.mediasourcewrapper {
+  width: 300px;
+  float: left;
+}
+
+.mediasourcepreview {
+  margin-left: 320px;
+}
+
+/* body select.select_box */
+body select {
+  display: block;
+  padding: 10px 70px 10px 13px !important;
+  width: 100%;
+  height: auto !important;
+  border: 1px solid #e3e3e3;
+  border-radius: 3px;
+  background: url("arrow.png") right center no-repeat;
+  background-color: #fff;
+  color: #444444;
+  font-size: 12px;
+  line-height: 16px !important;
+  appearance: none;
+  /* this is must */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+/* body select.select_box option */
+body select option {
+  padding: 5px;
+}
+
+/* for IE and Edge */
+select::-ms-expand {
+  display: none;
+}
+
+select:disabled::-ms-expand {
+  background: #f60;
 }
