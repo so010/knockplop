@@ -105,62 +105,24 @@
         <span class="settingsIcon material-icons md-light" onclick="showSettings()">settings</span>
       </div>
 
-      <div id="settingsWrapper" class="hidden">
+      <div id="settingsWrapper" class="hidden" style="padding:5px">
         <div id="settings">
-          <div class="mediasource">
-            <div class="mediasourcewrapper">
-              <div class="mediasourceheader">
-                <p>Video</p>
-              </div>
-              <div id="videosource" class="sourcechooser">
-                <select>
-                  <option value="volvo">Volvo</option>
-                  <option value="saab">Saab</option>
-                  <option value="opel">Opel</option>
-                  <option value="audi">Audi</option>
-                </select>
-              </div>
-            </div>
-            <div class="mediasourcepreview">
-              <p>Preview</p>
-            </div>
+          <div class="select">
+            <label for="audioSource">Audio input source: </label><select id="audioSource"></select>
           </div>
-          <div class="mediasource">
-            <div class="mediasourcewrapper">
-              <div class="mediasourceheader">
-                <p>Microphone</p>
-              </div>
-              <div id="micsource" class="sourcechooser">
-                <select>
-                  <option value="volvo">Volvo</option>
-                  <option value="saab">Saab</option>
-                  <option value="opel">Opel</option>
-                  <option value="audi">Audi</option>
-                </select>
-              </div>
-            </div>
-            <div class="mediasourcepreview">
-              <p>Preview</p>
-            </div>
+
+          <div class="select">
+            <label for="audioOutput">Audio output destination: </label><select id="audioOutput"></select>
           </div>
-          <div class="mediasource">
-            <div class="mediasourcewrapper">
-              <div class="mediasourceheader">
-                <p>Speakers</p>
-              </div>
-              <div id="audiosource" class="sourcechooser">
-                <select>
-                  <option value="volvo">Volvo</option>
-                  <option value="saab">Saab</option>
-                  <option value="opel">Opel</option>
-                  <option value="audi">Audi</option>
-                </select>
-              </div>
-            </div>
-            <div class="mediasourcepreview">
-              <p>Preview</p>
-            </div>
+
+          <div class="select">
+            <label for="videoSource">Video source: </label><select id="videoSource"></select>
           </div>
+
+          <div>
+            <video id="videoPreviewElement" style="width:99%" autoplay></video>
+          </div>
+
           <span id="saveSettingsButton">
             <button class="button" type="button" onclick="saveSettings()">
               Save
