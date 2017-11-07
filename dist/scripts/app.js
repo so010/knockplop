@@ -508,14 +508,6 @@ function initSocket() {
     console.log('received chat from ', msg.pid, msg.chat);
     appendChat(msg.chat);
   });
-  socket.on('requestchat', function(msg) {
-    console.log('received request for chat history from ', msg.pid);
-    chatRequest(msg.pid);
-  });
-  socket.on('chathistory', function(msg) {
-    console.log('received chat history from ', msg.pid, msg.history.chatMessages);
-    receivedChatHistory(msg.history.chatMessages);
-  });
   socket.on('name', function(msg) {
     console.log('received name from ', msg.pid, msg.name);
     receiveName(msg);
@@ -1334,24 +1326,6 @@ function chatMessage() {
   form.reset();
 
   return false; // Return false to disable normal form submition
-}
-
-function receiveChat(msg) {
-  chatMessages.push(msg);
-
-  appendChat(msg);
-}
-
-function receivedChatHistory(history) {
-  if (chatMessages.length === 0) {
-    for (var chat in history) {
-      receiveChat(history[chat]);
-    }
-  }
-}
-
-function chatRequest(pid) {
-  socket.emit('chathistory', {'history' : { chatMessages }, 'pid' : pid});
 }
 
 /*
