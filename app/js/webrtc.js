@@ -20,6 +20,7 @@ var notificationHidden = true;
 var unreadMessages = 0;
 var userName = "";
 var chatMessages = [];
+var autoJoin = false;
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
@@ -254,7 +255,11 @@ function receivedDescription(msg){
         // TODO: this is a ugly hack and should be handled somewhere else:
         participantList[msg.pid].peerConnection.onaddstream = function (event){
           replaceStream(event.stream,'localVideo')
-          document.getElementById("joinButton").classList.remove('hidden')
+          if (autoJoin) {
+            joinRoom();
+          } else {
+            document.getElementById("joinButton").classList.remove('hidden')
+          }
         }
       }
     }
@@ -719,7 +724,12 @@ function errorHandler(error) {
     console.error(error);
 }
 
-function joinRoom(){
+function joinRoom() {
+  if (document.getElementById("autoJoinBox").checked) {
+    setCookie("autoJoin", "true", 365);
+  } else {
+    setCookie("autoJoin", "false", 365);
+  }
   socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
   document.getElementById('joinButton').classList.add('hidden')
   document.getElementById('localMessage').classList.add('hidden')
@@ -868,6 +878,10 @@ function getCam(){
 }
 
 function pageReady() {
+  // Check cookie for various settings
+  userName = getCookie("userName");
+  autoJoin = getCookie("autoJoin") != "true" ? false : true;
+
   // JQuery GUI stuff
   $('#chat header').on('click', function() {
     if (chatHidden) { // Clicked on hidden chat
@@ -922,6 +936,7 @@ function pageReady() {
       userName = new_input;
       updated_text.text(new_input);
     }
+    setCookie("userName", userName, 365);
     sendName();
     $(this).replaceWith(updated_text);
   });
@@ -1091,4 +1106,26 @@ function sendChat(msg) {
 function receiveName(msg) {
   var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
   nameholder.innerHTML = msg.name;
+}
+
+function setCookie(name, value, expireDays) {
+  var d = new Date();
+  d.setTime(d.getTime() + (expireDays * 24 * 60 * 60 * 1000));
+  var expires = "expires="+d.toUTCString();
+  document.cookie = name + "=" + value + ";" + expires + ";path=/";
+}
+
+function getCookie(name) {
+  name = name + "=";
+  var ca = document.cookie.split(';');
+  for(var i = 0; i < ca.length; i++) {
+    var c = ca[i];
+    while (c.charAt(0) == ' ') {
+      c = c.substring(1);
+    }
+    if (c.indexOf(name) == 0) {
+      return c.substring(name.length, c.length);
+    }
+  }
+  return "";
 }

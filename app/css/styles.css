@@ -358,6 +358,10 @@ p {
 .leaveRoomIcon {
   color: red; }
 
+#autoJoin {
+  font-size: 1vh;
+  display: block; }
+
 /* Global settings */
 #settingsWrapper {
   z-index: 100;
