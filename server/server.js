@@ -6,7 +6,8 @@ var httpApp = express();
 var http = require('http');
 var https = require('https');
 var WebSocketServer = require('ws').Server;
-var config = require('./server-config');
+var config = require('../server-config');
+var path = require('path');
 
 // Yes, SSL is required
 var httpsServer = https.createServer(config.httpsConfig, app);
@@ -19,19 +20,21 @@ var stunrestanswer;
 
 
 // app.use(express.static(__dirname + '/dist'));
-app.use(express.static(__dirname + '/bower_components'));
-app.use('/pix',express.static(__dirname + '/pix'));
-app.use('/scripts',express.static(__dirname + '/dist/scripts'));
-app.use('/css',express.static(__dirname + '/dist/css'));
-app.use('/client-config.js',express.static(__dirname + '/client-config.js'));
-app.use('/',express.static(__dirname + '/google_verify'))
+console.log(__dirname);
+
+app.use(express.static(path.resolve(__dirname + '/../bower_components')));
+app.use('/pix',express.static(path.resolve(__dirname + '/../pix')));
+app.use('/scripts',express.static(path.resolve(__dirname + '/../dist/scripts')));
+app.use('/css',express.static(path.resolve(__dirname + '/../dist/css')));
+app.use('/client-config.js',express.static(path.resolve(__dirname + '/../client-config.js')));
+app.use('/',express.static(path.resolve(__dirname + '/../google_verify')))
 app.get('/', function (req, res) {
    console.log(req.url);
-   res.sendFile(__dirname + '/' + 'dist/chooseRoom.html');
+   res.sendFile(path.resolve(__dirname + '/../' + 'dist/chooseRoom.html'));
 })
 app.all('/*', function (req, res) {
    console.log(req.url);
-   res.sendFile(__dirname + '/' +'dist/index.html');
+   res.sendFile(path.resolve(__dirname + '/../' +'dist/index.html'));
 })
 httpsServer.listen(config.HTTPS_PORT, '::');
 
