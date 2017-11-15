@@ -153,7 +153,7 @@ function initSocket() {
     }
   });
   socket.on('sdp',function(msg){
-    console.log('received sdp from',msg.pid,msg.turn);
+    console.log('received sdp from', msg.pid, msg.turn, msg.sdp);
     receivedDescription(msg)
     sendName();
   });
