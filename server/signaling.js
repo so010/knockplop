@@ -63,60 +63,42 @@ class Signaling extends EventEmitter {
   newConnection(client) {
     console.log('New connection:', client.id);
 
-    // send private message to another id
-    client.on('message', (msg) => {
-      console.log('Receive msg:', msg && msg.type);
-      if (!msg) return;
+    // send private message to another user
+    client.on('message', (data) => {
+      console.log('Receive msg:', data && data.type);
+      if (!data) return;
 
-      var hasListener = this.emit('message', client, msg);
+      var hasListener = this.emit('message', client, data);
       if (!hasListener) {
-        logger.info('No listener, default process:', msg && msg.type);
-        this.processMsgMessage(client, msg);
+        this.processMsgMessage(client, data);
       }
     });
 
     // send message to server
-    client.on('server-message', (msg) => {
-      console.log('Receive server msg:', msg && msg.type);
-      if (!msg) return;
+    client.on('server-message', (data) => {
+      console.log('Receive server msg:', data && data.type);
+      if (!data) return;
 
-      var hasListener = this.emit('server-message', client, msg);
+      var hasListener = this.emit('server-message', client, data);
       if (!hasListener) {
-        logger.info('No listener, default process:', msg && msg.type);
-        this.processServerMessage(client, msg);
+        this.processServerMessage(client, data);
       }
     });
 
     // Send message to room
-    client.on('room-message', (msg) => {
-      console.log('Receive room msg:', msg && msg.type);
-      if (!msg) return;
+    client.on('room-message', (data) => {
+      console.log('Receive room msg:', data && data.type);
+      if (!data) return;
 
-      var hasListener = this.emit('room-message', client, msg);
+      var hasListener = this.emit('room-message', client, data);
       if (!hasListener) {
-        logger.info('No listener, default process:', msg && msg.type);
-        this.processRoomMessage(client, msg);
+        this.processRoomMessage(client, data);
       }
     });
 
-    /**
-    * Event: join, leave, bye, disconnect
-    */
     client.on('join', this.joinRoom.bind(this, client));
-    // client.on('leave', this.leaveRoom.bind(this, client));
     client.on('bye', this.leaveRoom.bind(this, client));
     client.on('disconnect', this.disconnect.bind(this, client));
-
-    /*
-    * Backwards compatible for now
-    * TODO: remove the following and use 'message' instead
-    */
-    client.on('ready', this.joinRoom.bind(this, client));
-    client.on('sdp', this.processSDPMessage.bind(this, client));
-    client.on('iceCandidate', this.processICEMessage.bind(this, client));
-    client.on('chat', this.processChatMessage.bind(this, client));
-    client.on('name', this.processNameMessage.bind(this, client));
-    // End of TODO
 
     var request_uri;
 
@@ -129,7 +111,7 @@ class Signaling extends EventEmitter {
     request(request_uri, function (error, response, body) {
       if (!error && response.statusCode == 200) {
         var stunrestanswer = JSON.parse(body);
-        client.restTURN = { urls: stunrestanswer.uris, username: stunrestanswer.username, credential: stunrestanswer.password };
+        client.restTURN = {urls : stunrestanswer.uris, username : stunrestanswer.username, credential : stunrestanswer.password};
         client.emit('restTURN', {'restTURN' : client.restTURN});
       } else {
         client.emit('restTURN', {'restTURN' : null});
@@ -139,46 +121,23 @@ class Signaling extends EventEmitter {
     this.emit('connection', client);
   }
 
-  processMsgMessage(client, msg) {
-    var toClient = this.io.to(msg.pid);
-    if (!toClient || !msg.pid) {
+  processMsgMessage(client, data) {
+    var toClient = this.io.to(data.pid);
+    if (!toClient || !data.pid) {
       return;
     }
 
-    toClient.emit('message', {'pid' : client.id, 'msg' : msg});
+    toClient.emit('message', {'pid' : client.id, 'type' : data.type, 'content' : data.content});
   }
 
-  processRoomMessage(client, msg) {
-    client.broadcast.to(client.room).emit('room-message', {'pid' : client.id, 'msg' : msg});
+  processRoomMessage(client, data) {
+    client.broadcast.to(client.room).emit('room-message', {'pid' : client.id, 'type' : data.type, 'content' : data.content});
   }
 
-  processServerMessage(client, msg) {
+  processServerMessage(client, data) {
     console.log('Server message, not handled!');
   }
-
-  /*
-  * Legacy stuff
-  * TODO: remove the following
-  */
-  processSDPMessage(client, msg) {
-    console.log('received sdp %s from %s type: %s > forward to %s ...', msg.sdp, client.id, msg.sdp.type, msg.pid);
-    client.broadcast.to(msg.pid).emit('sdp', {'pid' : client.id, 'sdp' : msg.sdp , 'turn' : msg.turn});
-  }
-
-  processICEMessage(client, msg) {
-    client.broadcast.to(msg.pid).emit('iceCandidate', {'pid' : client.id, 'candidate' : msg.candidate});
-  }
-
-  processChatMessage(client, msg) {
-    client.broadcast.to(client.room).emit('chat', {'pid' : client.id, 'chat' : msg});
-  }
-
-  processNameMessage(client, msg) {
-    client.broadcast.to(client.room).emit('name', {'pid' : client.id, 'name' : msg});
-  }
 }
-
-// End of TODO
 
 module.exports = function (server) {
   return new Signaling(server);

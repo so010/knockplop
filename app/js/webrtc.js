@@ -152,14 +152,32 @@ function initSocket() {
       console.log('received empty restTURN config from server :(');
     }
   });
-  socket.on('sdp',function(msg){
-    console.log('received sdp from', msg.pid, msg.turn, msg.sdp);
-    receivedDescription(msg)
-    sendName();
+  socket.on('message', function(msg) {
+    console.log('received message from', msg.pid, msg.type, msg.content);
+    switch (msg.type) {
+      case "sdp":
+        console.log('received sdp from', msg.pid, msg.content.turn, msg.content.sdp);
+        receivedDescription(msg.content)
+        break;
+      case "iceCandidate":
+        participantList[msg.pid].peerConnection.addIceCandidate(new RTCIceCandidate(msg.content.candidate)).catch(errorHandler);
+        break;
+    }
   });
-  socket.on('iceCandidate',function(msg){
-    // console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
-    participantList[msg.pid].peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(errorHandler);
+  socket.on('room-message', function(msg) {
+    console.log('received message from', msg.pid, msg.content);
+    switch (msg.type) {
+      case 'chat':
+        console.log('received chat from ', msg.pid, msg.content);
+        appendChat(msg.content);
+        break;
+      case 'name':
+        console.log('received name from ', msg.pid, msg.content);
+        receiveName(msg.content);
+        break;
+      default:
+        break;
+    }
   });
   socket.on('participantReady',function(msg){
     console.log('got participantReady:',msg );
@@ -196,48 +214,40 @@ function initSocket() {
       }.bind(msg))
     }.bind(msg))
   });
-  socket.on('chat', function(msg) {
-    console.log('received chat from ', msg.pid, msg.chat);
-    appendChat(msg.chat);
-  });
-  socket.on('name', function(msg) {
-    console.log('received name from ', msg.pid, msg.name);
-    receiveName(msg);
-  });
   window.onunload = function(){socket.emit('bye')};
 }
 
 function createPeerConnection(pid,turn) {
-    console.log("Creating PeerConnection for pid: " + pid);
-    var peerConnectionConfig = {}
-    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+  console.log("Creating PeerConnection for pid: " + pid);
+  var peerConnectionConfig = {}
+  peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
 
-    /*
-    if ( typeof(msg.turn) != 'undefined') {
-      participantList[pid].turn=turn;
-      peerConnectionConfig.iceServers =
-        participantList[pid].turn.concat(peerConnectionConfig.iceServers)
-    }
-    */
+  /*
+  if ( typeof(msg.turn) != 'undefined') {
+  participantList[pid].turn=turn;
+  peerConnectionConfig.iceServers =
+  participantList[pid].turn.concat(peerConnectionConfig.iceServers)
+}
+*/
 
-    if ( pid.indexOf('mirror') != -1 ) {
-      peerConnectionConfig.iceTransportPolicy = 'relay'
-    }
+if ( pid.indexOf('mirror') != -1 ) {
+  peerConnectionConfig.iceTransportPolicy = 'relay'
+}
 
-    var pc = new RTCPeerConnection(peerConnectionConfig);
-    pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
-    pc.onaddstream = function (event){addStream(event.stream,pid)};
-    pc.onnegotiationneeded = handleRenegotiation;
-    return pc;
+var pc = new RTCPeerConnection(peerConnectionConfig);
+pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
+pc.onaddstream = function (event){addStream(event.stream,pid)};
+pc.onnegotiationneeded = handleRenegotiation;
+return pc;
 }
 
 function callParticipant(msg) {
-    console.log("callParticipant with pid: " + msg.pid);
-    participantList[msg.pid] = {};
-    participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
-    participantList[msg.pid].peerConnection.addStream(localStream);
-    // Create offer for target pid and then send through signalling.
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid,true)}).catch(errorHandler);
+  console.log("callParticipant with pid: " + msg.pid);
+  participantList[msg.pid] = {};
+  participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
+  participantList[msg.pid].peerConnection.addStream(localStream);
+  // Create offer for target pid and then send through signalling.
+  participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid,true)}).catch(errorHandler);
 }
 
 function receivedDescription(msg){
@@ -260,9 +270,6 @@ function receivedDescription(msg){
     }
     participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
     participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
-    if (chatMessages.length === 0) {
-      socket.emit('requestchat', {'pid' : msg.pid});
-    }
   }
   else if (msg.sdp.type == 'answer') {
     console.log("Received ANSWER SDP from pid: " + msg.pid);
@@ -288,7 +295,7 @@ function gotIceCandidate(candidate, pid) {
   if(candidate != null) {
     // console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
     if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror
-      socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
+      socket.emit('message', {'pid' : pid, 'type' : 'iceCandidate', 'content' : {'candidate':candidate}});
     }
     else { // candidates from mirroring set we directly ( but only relay candidates )
       if ( candidate.candidate.split("typ")[1].split(" ",2 )[1] == 'relay' )  {
@@ -310,20 +317,23 @@ function createdDescription(description,pid,isOffer) {
 function sendSDP(sdp, pid) {
   console.log('Sending SDP to', pid);
   var msg = {};
+  msg.content = {};
   if ( sdp.type == 'offer' ){
-    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
+    msg.content.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
   }
-  msg.sdp = sdp
-  msg.pid = pid
+  msg.content.sdp = sdp;
+  msg.type = 'sdp';
+  msg.pid = pid;
+  msg.content.pid = userPid;
   // mirroring description are not sent via signalling server but managed locally:
   if ( pid.indexOf('mirror') == -1 ){
-    socket.emit('sdp',msg)
+    socket.emit('message', msg)
     console.log('sending message:',msg)
   } else {
-     // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
-    if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
-    else { msg.pid = 'mirrorReceiver' }
-    receivedDescription(msg)
+    // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
+    if (pid == 'mirrorReceiver') { msg.content.pid = 'mirrorSender' }
+    else { msg.content.pid = 'mirrorReceiver' }
+    receivedDescription(msg.content)
   }
 }
 
@@ -336,74 +346,74 @@ function addStream( stream, pid ) {
     // Video element already exists for this pid, so just replace the source with the given stream.
     replaceStream(stream, pid)
   } else {
-      var videoDiv = {}
-      participantList[pid].mediaStream = stream;
-      var video = document.createElement('video');
-      video.srcObject = stream;
-      video.autoplay = true;
-      if ( pid == "localVideo" ) {
-        video.muted = true;
-        videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
-        videoDiv.style.height = "100%";
-        video.style.cssText = "-moz-transform: scale(-1, 1); \
-          -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
-          transform: scale(-1, 1); filter: FlipH;";
-      } else {
-        videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
-        videoDiv.style.opacity = "0"; // invisible until layout is settled
-      }
-      videoDiv.appendChild(video);
-      var progressBarDiv = document.createElement('div')
-      progressBarDiv.classList.add('overlayBottom','hidden')
-      var progressBar = new ProgressBar.Line(progressBarDiv, {
-        strokeWidth: 5,
-        easing: 'easeInOut',
-        duration: 100,
-        color: '#FFEA82',
-        trailColor: '#eee',
-        trailWidth: 1,
-        svgStyle: {width: '85%'},
-        text: {
-          style: {
-            // Text color.
-            // Default: same as stroke color (options.color)
-            color: '#fff',
-            position: 'absolute',
-            // display:'block',
-            right: '0px',
-            // bottom: '0px',
-            width:'15%',
-            padding: '2px',
-            margin: '2px',
-            top: '50%',
-            transform: 'translate(0,-50%)',
-          },
-          autoStyleContainer: false
+    var videoDiv = {}
+    participantList[pid].mediaStream = stream;
+    var video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay = true;
+    if ( pid == "localVideo" ) {
+      video.muted = true;
+      videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
+      videoDiv.style.height = "100%";
+      video.style.cssText = "-moz-transform: scale(-1, 1); \
+      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+      transform: scale(-1, 1); filter: FlipH;";
+    } else {
+      videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
+      videoDiv.style.opacity = "0"; // invisible until layout is settled
+    }
+    videoDiv.appendChild(video);
+    var progressBarDiv = document.createElement('div')
+    progressBarDiv.classList.add('overlayBottom','hidden')
+    var progressBar = new ProgressBar.Line(progressBarDiv, {
+      strokeWidth: 5,
+      easing: 'easeInOut',
+      duration: 100,
+      color: '#FFEA82',
+      trailColor: '#eee',
+      trailWidth: 1,
+      svgStyle: {width: '85%'},
+      text: {
+        style: {
+          // Text color.
+          // Default: same as stroke color (options.color)
+          color: '#fff',
+          position: 'absolute',
+          // display:'block',
+          right: '0px',
+          // bottom: '0px',
+          width:'15%',
+          padding: '2px',
+          margin: '2px',
+          top: '50%',
+          transform: 'translate(0,-50%)',
         },
-        from: {color: '#FFEA82'},
-        to: {color: '#ED6A5A'},
-        step: (state, bar) => {
-          bar.setText(Math.round(bar.value() * 100) + ' %')
-        }
-      })
-      participantList[pid].progressBar = progressBar
-      videoDiv.appendChild(progressBarDiv)
-      var lastVideoDiv = videoContainer.lastElementChild;
-      videoContainer.appendChild(videoDiv);
-      videoDiv.addEventListener("drop",drop);
-      videoDiv.addEventListener("dragstart",dragStart);
-      videoDiv.addEventListener("dragover",allowDrop);
-      videoDiv.addEventListener("dragend", dragEnd);
-      videoDiv.addEventListener("dragleave", dragLeave);
-      videoDiv.addEventListener("dragenter", dragEnter);
-      videoDiv.draggable="true";
-      videoDiv.id = pid;
-      participantList[pid].videoDiv = videoDiv;
-      if ( lastVideoDiv ) {
-        videoDiv.style.height =  lastVideoDiv.style.height;
+        autoStyleContainer: false
+      },
+      from: {color: '#FFEA82'},
+      to: {color: '#ED6A5A'},
+      step: (state, bar) => {
+        bar.setText(Math.round(bar.value() * 100) + ' %')
       }
-      videoDiv.classList.remove('hidden');
-      fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
+    })
+    participantList[pid].progressBar = progressBar
+    videoDiv.appendChild(progressBarDiv)
+    var lastVideoDiv = videoContainer.lastElementChild;
+    videoContainer.appendChild(videoDiv);
+    videoDiv.addEventListener("drop",drop);
+    videoDiv.addEventListener("dragstart",dragStart);
+    videoDiv.addEventListener("dragover",allowDrop);
+    videoDiv.addEventListener("dragend", dragEnd);
+    videoDiv.addEventListener("dragleave", dragLeave);
+    videoDiv.addEventListener("dragenter", dragEnter);
+    videoDiv.draggable="true";
+    videoDiv.id = pid;
+    participantList[pid].videoDiv = videoDiv;
+    if ( lastVideoDiv ) {
+      videoDiv.style.height =  lastVideoDiv.style.height;
+    }
+    videoDiv.classList.remove('hidden');
+    fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
   }
 }
 
@@ -492,8 +502,8 @@ function setBigVideo(pid){
   if ( pid == "localVideo" ) {
     video.muted = true;
     video.style.cssText = "-moz-transform: scale(-1, 1); \
-      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
-      transform: scale(-1, 1); filter: FlipH;";
+    -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+    transform: scale(-1, 1); filter: FlipH;";
   }
   videoContainer.style.top = "90%";
   bigVideoContainer.appendChild(video);
@@ -516,19 +526,19 @@ function toggleFullScreen() {
   var element = document.documentElement;
   // Supports most browsers and their versions.
   var requestFullscreen = element.requestFullScreen ||
-                      element.webkitRequestFullScreen ||
-                      element.mozRequestFullScreen;
+  element.webkitRequestFullScreen ||
+  element.mozRequestFullScreen;
   if (requestFullscreen) { // Native full screen.
     var fullscreenElement = document.fullscreenElement ||
-                            document.webkitFullscreenElement ||
-                            document.mozFullScreenElement;
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement;
     var exitFullscreen = document.exitFullscreen ||
-                         document.mozCancelFullScreen ||
-                         document.webkitExitFullscreen;
+    document.mozCancelFullScreen ||
+    document.webkitExitFullscreen;
     var fullscreenIcon = document.getElementById('bigVideoContainer').
-                         getElementsByClassName('fullscreenIcon')[0];
+    getElementsByClassName('fullscreenIcon')[0];
     var exitFullscreenIcon = document.getElementById('bigVideoContainer').
-                             getElementsByClassName('exitFullscreenIcon')[0];
+    getElementsByClassName('exitFullscreenIcon')[0];
     if (!fullscreenElement) {
       requestFullscreen.call(element);
       exitFullscreenIcon.classList.remove('hidden');
@@ -578,48 +588,48 @@ function checkVideoContainer(){
   var height = last.style.height.split("%")[0] / 100; // 1 = 100%
   // only if last element's video is connected otherwise wait
   if ( ( last.getElementsByTagName("video")[0].networkState == 2 ||
-         last.getElementsByTagName("video")[0].networkState == 1 ) ) {
+  last.getElementsByTagName("video")[0].networkState == 1 ) ) {
     // if last element is out of window:
     var videoDivList = videoContainer.getElementsByClassName("videoDiv")
     if ( last.getBoundingClientRect().bottom > window.innerHeight ) {
       for(var i=0;i<videoDivList.length;i++){
         videoDivList[i].style.height =
-          ( 100 / ( ( 1 / height ) + 0.1 ) ) + "%"
+        ( 100 / ( ( 1 / height ) + 0.1 ) ) + "%"
       }
       videoContainerChanged = true;
       window.setTimeout(checkVideoContainer,20 );
-    // if there is enough space in the bottom AND in the left
+      // if there is enough space in the bottom AND in the left
     } else if ( ( ( window.innerHeight - last.getBoundingClientRect().bottom ) >
-                    ( window.innerHeight * 0.1 ) ) &&
-                  ( ( videoContainer.firstElementChild.getBoundingClientRect().left ) >
-                    ( window.innerWidth * 0.012 ) ) ) {
-        for(i=0;i<videoDivList.length;i++){
-          videoDivList[i].style.height = height * 100 +
-            ( ( videoContainer.firstElementChild.getBoundingClientRect().left -
-                window.innerWidth * 0.01 ) * 100 / window.innerWidth * 0.99 ) / 10 + "%"
-        }
-        videoContainerChanged = true;
-        unHideOpaqueElements(videoContainer)
-        window.setTimeout(checkVideoContainer,20 );
+    ( window.innerHeight * 0.1 ) ) &&
+    ( ( videoContainer.firstElementChild.getBoundingClientRect().left ) >
+    ( window.innerWidth * 0.012 ) ) ) {
+      for(i=0;i<videoDivList.length;i++){
+        videoDivList[i].style.height = height * 100 +
+        ( ( videoContainer.firstElementChild.getBoundingClientRect().left -
+        window.innerWidth * 0.01 ) * 100 / window.innerWidth * 0.99 ) / 10 + "%"
+      }
+      videoContainerChanged = true;
+      unHideOpaqueElements(videoContainer)
+      window.setTimeout(checkVideoContainer,20 );
     } else {
-        // check if videoContainer was modified before so it should be finished
-        // now - so we can redraw it ( because chrome live rendering is not perfect )
-        if ( videoContainerChanged == true ) {
-          forceRedraw(videoContainer)
-        }
-        unHideOpaqueElements(videoContainer)
-        window.setTimeout(checkVideoContainer, 200 ); // standard recheck timeframe
-        videoContainerChanged = false;
+      // check if videoContainer was modified before so it should be finished
+      // now - so we can redraw it ( because chrome live rendering is not perfect )
+      if ( videoContainerChanged == true ) {
+        forceRedraw(videoContainer)
+      }
+      unHideOpaqueElements(videoContainer)
+      window.setTimeout(checkVideoContainer, 200 ); // standard recheck timeframe
+      videoContainerChanged = false;
     }
   } else {
-      // wait until new video stream for last participant is settled
-      window.setTimeout(checkVideoContainer, 200 );
+    // wait until new video stream for last participant is settled
+    window.setTimeout(checkVideoContainer, 200 );
   }
 }
 
 function dragLeave( ev ) {
   console.log("dragLeave")
-//   event.target.style.padding = "1px";
+  //   event.target.style.padding = "1px";
 }
 
 function dragEnter( ev ) {
@@ -627,38 +637,38 @@ function dragEnter( ev ) {
   console.log("dragEnter",this.id, ev.dataTransfer.getData("text") )
   var videoList = videoContainer.getElementsByTagName("video")
   for(var i=0;i<videoList.length;i++)
-    { videoList[i].style.padding = "1px" }
+  { videoList[i].style.padding = "1px" }
   dragLastOver = this.id;
 }
 
 function dragEnd ( ev ) {
-    // reset the transparency and padding of drag source and size of videoContainer
-    ev.target.style.opacity = "";
-    var videoList = videoContainer.getElementsByTagName("video")
-    for(var i=0;i<videoList.length;i++)
-          { videoList[i].style.padding = "1px" }
+  // reset the transparency and padding of drag source and size of videoContainer
+  ev.target.style.opacity = "";
+  var videoList = videoContainer.getElementsByTagName("video")
+  for(var i=0;i<videoList.length;i++)
+  { videoList[i].style.padding = "1px" }
 }
 
 function allowDrop(ev) {
-    ev.preventDefault();
-    if ( this.id == dragSource ) {return};
-    var element = document.getElementById(this.id);
-    var elementVideo = element.getElementsByTagName("video")[0]
+  ev.preventDefault();
+  if ( this.id == dragSource ) {return};
+  var element = document.getElementById(this.id);
+  var elementVideo = element.getElementsByTagName("video")[0]
 
-    var destElement = document.getElementById(this.id);
-    var destElementVideo = destElement.getElementsByTagName("video")[0]
+  var destElement = document.getElementById(this.id);
+  var destElementVideo = destElement.getElementsByTagName("video")[0]
 
-    if ( ev.offsetX > destElementVideo.offsetWidth / 2 ) {
-      if ( destElement.nextSibling == null ){ // insert at end
-        videoContainer.appendChild(document.getElementById( dragSource ) )
-      } else { // insert before next element
-        videoContainer.insertBefore(document.getElementById( dragSource ),
-          destElement.nextSibling);
-      }
-    } else { // insert here
-      videoContainer.insertBefore(document.getElementById(dragSource), element);
+  if ( ev.offsetX > destElementVideo.offsetWidth / 2 ) {
+    if ( destElement.nextSibling == null ){ // insert at end
+      videoContainer.appendChild(document.getElementById( dragSource ) )
+    } else { // insert before next element
+      videoContainer.insertBefore(document.getElementById( dragSource ),
+      destElement.nextSibling);
     }
-    document.getElementById(dragSource).getElementsByTagName("video")[0].play();
+  } else { // insert here
+    videoContainer.insertBefore(document.getElementById(dragSource), element);
+  }
+  document.getElementById(dragSource).getElementsByTagName("video")[0].play();
 }
 
 function dragStart(ev) {
@@ -671,23 +681,23 @@ function dragStart(ev) {
 }
 
 function drop(ev) {
-    ev.preventDefault();
-    if ( this.id == dragSource ) {return};
-    var data = ev.dataTransfer.getData("text");
-    var destElement = document.getElementById(this.id);
-    var destElementVideo = destElement.getElementsByTagName("video")[0];
+  ev.preventDefault();
+  if ( this.id == dragSource ) {return};
+  var data = ev.dataTransfer.getData("text");
+  var destElement = document.getElementById(this.id);
+  var destElementVideo = destElement.getElementsByTagName("video")[0];
 
-    if ( ev.offsetX > destElementVideo.offsetWidth / 2 ) {
-      if ( destElement.nextSibling == null ){ // insert at end
-        videoContainer.appendChild(document.getElementById( data ) )
-      } else { // insert before next element
-        videoContainer.insertBefore(document.getElementById( data ), destElement.nextSibling);
-      }
-    } else { // insert here
-      videoContainer.insertBefore(document.getElementById(data), destElement);
+  if ( ev.offsetX > destElementVideo.offsetWidth / 2 ) {
+    if ( destElement.nextSibling == null ){ // insert at end
+      videoContainer.appendChild(document.getElementById( data ) )
+    } else { // insert before next element
+      videoContainer.insertBefore(document.getElementById( data ), destElement.nextSibling);
     }
-    document.getElementById(data).getElementsByTagName("video")[0].play();
-    document.getElementById(data).style.opacity = "1";
+  } else { // insert here
+    videoContainer.insertBefore(document.getElementById(data), destElement);
+  }
+  document.getElementById(data).getElementsByTagName("video")[0].play();
+  document.getElementById(data).style.opacity = "1";
 }
 
 function fadeOutElements(pid) {
@@ -716,11 +726,11 @@ function toggleStickyness(pid) {
 }
 
 function errorHandler(error) {
-    console.error(error);
+  console.error(error);
 }
 
 function joinRoom(){
-  socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
+  socket.emit('join', {'room':room, 'turn':iceServerManager.getFastestTurnServers()})
   document.getElementById('joinButton').classList.add('hidden')
   document.getElementById('localMessage').classList.add('hidden')
   document.getElementById('localTopLeft').insertBefore(document.getElementById('audioIndicator'),document.getElementById('localTopLeft').childNodes[0])
@@ -764,7 +774,7 @@ var progressBarManager = {
 }
 
 function setGlobalMessage(msg){
-//  document.getElementById('globalMessage').classList.remove('hidden')
+  //  document.getElementById('globalMessage').classList.remove('hidden')
   document.getElementById('globalMessageTextField').innerHTML = msg
 }
 
@@ -776,7 +786,7 @@ function fadeOut(element){
       element.classList.add('hidden');
     }
     element.style.opacity = op;
-//    element.style.filter = 'alpha(opacity=' + op * 100 + ")";
+    //    element.style.filter = 'alpha(opacity=' + op * 100 + ")";
     op -= op * 0.1;
   }, 70);
 }
@@ -854,16 +864,16 @@ function getCam(){
   var constraints = {
     audio: true,
     video: {
-        "width": {"min": "50","ideal":"1280",  "max": "1920"},
-        "height": {"min": "50","ideal":"768",  "max": "1050"}
-      }
+      "width": {"min": "50","ideal":"1280",  "max": "1920"},
+      "height": {"min": "50","ideal":"768",  "max": "1050"}
+    }
   };
 
   // get camera and mic:
   if(navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(constraints).then(getCamSuccess).catch(errorHandler);
+    navigator.mediaDevices.getUserMedia(constraints).then(getCamSuccess).catch(errorHandler);
   } else {
-      alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+    alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
   }
 }
 
@@ -954,141 +964,141 @@ function pageReady() {
   setGlobalMessage('Testing connection step 1')
   if ( typeof(peerConnectionConfig.iceServers) != 'undefined' && peerConnectionConfig.iceServers.length > 0 ) {
     iceServerManager.startTesting(peerConnectionConfig.iceServers,undefined,
-          progressBarManager.updateProgress.bind(progressBarManager))
+      progressBarManager.updateProgress.bind(progressBarManager))
+    }
+    setGlobalMessage('Initializing...')
+    initSocket()
+
+    window.addEventListener('resize', redrawVideoContainer);
+    window.setTimeout(checkVideoContainer, 2500);
   }
-  setGlobalMessage('Initializing...')
-  initSocket()
-
-  window.addEventListener('resize', redrawVideoContainer);
-  window.setTimeout(checkVideoContainer, 2500);
-}
 
 
-if (adapter.browserDetails.browser === 'chrome') {
-  // Listen for events from the Chrome extension used for screensharing.
-  // Code from Janus project (Copyright (c) 2016 Meetecho)
-  window.addEventListener('message', function (event) {
-    if(event.origin != window.location.origin)
+  if (adapter.browserDetails.browser === 'chrome') {
+    // Listen for events from the Chrome extension used for screensharing.
+    // Code from Janus project (Copyright (c) 2016 Meetecho)
+    window.addEventListener('message', function (event) {
+      if(event.origin != window.location.origin)
       return;
-    if (event.data.type == 'janusGotScreen') {
-      if (event.data.sourceId === '') {
-        // user canceled
-        console.log('You cancelled the request for permission, giving up...');
-      } else {
-        var constraints = {
-          audio: false,             // Chrome currently does not support retrieving the one with the screen
-          video: {
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              maxWidth: window.screen.width,
-              maxHeight: window.screen.height,
-              maxFrameRate: 3
-            },
-            optional: [
-              {googTemporalLayeredScreencast: true}
-            ]
-          }
-        };
+      if (event.data.type == 'janusGotScreen') {
+        if (event.data.sourceId === '') {
+          // user canceled
+          console.log('You cancelled the request for permission, giving up...');
+        } else {
+          var constraints = {
+            audio: false,             // Chrome currently does not support retrieving the one with the screen
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                maxWidth: window.screen.width,
+                maxHeight: window.screen.height,
+                maxFrameRate: 3
+              },
+              optional: [
+                {googTemporalLayeredScreencast: true}
+              ]
+            }
+          };
 
-        constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
-        // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
-        navigator.mediaDevices.getUserMedia(constraints).then(getChromeScreenSuccess).catch(errorHandler);
-      }
-    } else if (event.data.type == 'janusGetScreenPending') {
+          constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
+          // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
+          navigator.mediaDevices.getUserMedia(constraints).then(getChromeScreenSuccess).catch(errorHandler);
+        }
+      } else if (event.data.type == 'janusGetScreenPending') {
         window.clearTimeout(event.data.id);
-    }
-  });
-}
+      }
+    });
+  }
 
-/* Chat */
+  /* Chat */
 
-// Chat message submitted
-function chatMessage() {
-  var form = document.getElementById('chat-form');
-  var messageText = form.elements['message'].value;
+  // Chat message submitted
+  function chatMessage() {
+    var form = document.getElementById('chat-form');
+    var messageText = form.elements['message'].value;
 
-  // Empty name for now
-  var msg = {pid: userPid, name : userName, time : Date.now(), message : messageText};
+    // Empty name for now
+    var msg = {pid: userPid, name : userName, time : Date.now(), message : messageText};
 
-  chatMessages.push(msg);
+    chatMessages.push(msg);
 
-  sendChat(msg);
-  appendChat(msg);
+    sendChat(msg);
+    appendChat(msg);
 
-  form.reset();
+    form.reset();
 
-  return false; // Return false to disable normal form submition
-}
+    return false; // Return false to disable normal form submition
+  }
 
-/*
+  /*
 
-msg = {"name" : "displayname", "time" : "timestamp", "message" : "messagetext"}
+  msg = {"name" : "displayname", "time" : "timestamp", "message" : "messagetext"}
 
-<div class="chat-message clearfix">
+  <div class="chat-message clearfix">
   <div class="chat-message-content clearfix">
-    <span class="chat-time">13:35</span>
-    <h5>John Doe</h5>
-    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Error,
-      explicabo quasi ratione odio dolorum harum.</p>
+  <span class="chat-time">13:35</span>
+  <h5>John Doe</h5>
+  <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Error,
+  explicabo quasi ratione odio dolorum harum.</p>
   </div> <!-- end chat-message-content -->
-</div> <!-- end chat-message -->
-<hr>
+  </div> <!-- end chat-message -->
+  <hr>
 
-*/
+  */
 
-// Chat appended to history
-function appendChat(msg) {
-  var chatHistory = document.getElementById('chat-history');
+  // Chat appended to history
+  function appendChat(msg) {
+    var chatHistory = document.getElementById('chat-history');
 
-  var chatText = document.createElement('p');
-  chatText.appendChild(document.createTextNode(msg.message));
+    var chatText = document.createElement('p');
+    chatText.appendChild(document.createTextNode(msg.message));
 
-  var chatName = document.createElement('h5');
-  chatName.appendChild(document.createTextNode(msg.name));
+    var chatName = document.createElement('h5');
+    chatName.appendChild(document.createTextNode(msg.name));
 
-  var time = new Date(msg.time);
-  var chatTime = document.createElement('span');
-  chatTime.className = 'chat-time';
-  chatTime.appendChild(document.createTextNode((time.getHours() < 10 ? '0' : '') + time.getHours() + ':' + (time.getMinutes() < 10 ? '0' : '') + time.getMinutes()));
+    var time = new Date(msg.time);
+    var chatTime = document.createElement('span');
+    chatTime.className = 'chat-time';
+    chatTime.appendChild(document.createTextNode((time.getHours() < 10 ? '0' : '') + time.getHours() + ':' + (time.getMinutes() < 10 ? '0' : '') + time.getMinutes()));
 
-  var chatMessageContent = document.createElement('div');
-  chatMessageContent.className = 'chat-message-content clearfix';
-  chatMessageContent.appendChild(chatTime);
-  chatMessageContent.appendChild(chatName);
-  chatMessageContent.appendChild(chatText);
+    var chatMessageContent = document.createElement('div');
+    chatMessageContent.className = 'chat-message-content clearfix';
+    chatMessageContent.appendChild(chatTime);
+    chatMessageContent.appendChild(chatName);
+    chatMessageContent.appendChild(chatText);
 
-  var chatMessage = document.createElement('div');
-  chatMessage.className = 'chat-message clearfix';
-  chatMessage.appendChild(chatMessageContent);
+    var chatMessage = document.createElement('div');
+    chatMessage.className = 'chat-message clearfix';
+    chatMessage.appendChild(chatMessageContent);
 
-  chatHistory.appendChild(chatMessage);
-  chatHistory.appendChild(document.createElement('hr'));
+    chatHistory.appendChild(chatMessage);
+    chatHistory.appendChild(document.createElement('hr'));
 
-  chatHistory.scrollTop = chatHistory.scrollHeight - chatHistory.clientHeight;
+    chatHistory.scrollTop = chatHistory.scrollHeight - chatHistory.clientHeight;
 
-  if (chatHidden) { // Update unread count and show notification if hidden
-    unreadMessages++;
-    var unreadCounter = document.getElementById('chat-message-counter');
-    unreadCounter.innerHTML = unreadMessages;
+    if (chatHidden) { // Update unread count and show notification if hidden
+      unreadMessages++;
+      var unreadCounter = document.getElementById('chat-message-counter');
+      unreadCounter.innerHTML = unreadMessages;
 
-    if (notificationHidden) {
-      $('#chatAudio')[0].play();
-      $('.chat-message-counter').fadeIn(300, 'swing');
-      notificationHidden = false;
+      if (notificationHidden) {
+        $('#chatAudio')[0].play();
+        $('.chat-message-counter').fadeIn(300, 'swing');
+        notificationHidden = false;
+      }
     }
   }
-}
 
-function sendName() {
-  socket.emit('name', userName);
-}
+  function sendName() {
+    socket.emit('room-message', {'type' : 'name', 'content' : {'pid' : userPid, 'name' : userName}});
+  }
 
-function sendChat(msg) {
-  socket.emit('chat', msg);
-}
+  function sendChat(msg) {
+    socket.emit('room-message', {'type' : 'chat', 'content' : msg});
+  }
 
-// msg = {pid: pid, name: name}
-function receiveName(msg) {
-  var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
-  nameholder.innerHTML = msg.name;
-}
+  // msg = {pid: pid, name: name}
+  function receiveName(msg) {
+    var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
+    nameholder.innerHTML = msg.name;
+  }
