@@ -4,29 +4,12 @@ const util = require('util');
 const ws = require('socket.io');
 const EventEmitter = require('events');
 const request = require('request');
-
-/**
-* Callback Utility
-*/
-function isFunction(cb) {
-  if (typeof cb === 'function') {
-    return cb;
-  } else {
-    return () => 1;
-  }
-}
+const config = require('../server-config');
 
 class Signaling extends EventEmitter {
-  constructor(server, options) {
+  constructor(server) {
     super();
     this.io = null;
-
-    // override default config
-    for (let opt in options) {
-      if (options.hasOwnProperty(opt)) {
-        this.config[opt] = options[opt];
-      }
-    }
 
     if (server != null) {
       console.log('Start signaling server ...');
@@ -40,10 +23,10 @@ class Signaling extends EventEmitter {
     this.emit('signalingReady', server);
   }
 
-  joinRoom(client, options, cb) {
+  joinRoom(client, options) {
     // sanity check
     if (typeof options.room !== 'string') {
-      return isFunction(cb)('room must be a string');
+      return;
     }
 
     client.join(options.room);
@@ -51,8 +34,8 @@ class Signaling extends EventEmitter {
     var hasListener = this.emit('join', options, client);
     if (!hasListener) {
       client.broadcast.to(client.room).emit('participantReady', {
-        pid : client.id,
-        restTURN : options.restTURN
+        'pid' : client.id,
+        'restTURN' : options.restTURN
       });
     }
   }
@@ -81,26 +64,38 @@ class Signaling extends EventEmitter {
     console.log('New connection:', client.id);
 
     // send private message to another id
-    client.on('message', (msg, cb) => {
+    client.on('message', (msg) => {
       console.log('Receive msg:', msg && msg.type);
       if (!msg) return;
 
-      var hasListener = this.emit('message', client, msg, cb);
+      var hasListener = this.emit('message', client, msg);
       if (!hasListener) {
         logger.info('No listener, default process:', msg && msg.type);
-        this.processMsgMessage(client, msg, cb);
+        this.processMsgMessage(client, msg);
       }
     });
 
     // send message to server
-    client.on('server-message', (msg, cb) => {
+    client.on('server-message', (msg) => {
       console.log('Receive server msg:', msg && msg.type);
       if (!msg) return;
 
-      var hasListener = this.emit('server-message', client, msg, cb);
+      var hasListener = this.emit('server-message', client, msg);
       if (!hasListener) {
         logger.info('No listener, default process:', msg && msg.type);
-        this.processServerMessage(client, msg, cb);
+        this.processServerMessage(client, msg);
+      }
+    });
+
+    // Send message to room
+    client.on('room-message', (msg) => {
+      console.log('Receive room msg:', msg && msg.type);
+      if (!msg) return;
+
+      var hasListener = this.emit('room-message', client, msg);
+      if (!hasListener) {
+        logger.info('No listener, default process:', msg && msg.type);
+        this.processRoomMessage(client, msg);
       }
     });
 
@@ -124,23 +119,19 @@ class Signaling extends EventEmitter {
     // End of TODO
 
     var request_uri;
-    var config = this.config;
 
     if (client.request.connection.remoteAddress) {
-      request_uri = 'https://brain.lab.vvc.niif.hu/restapi/turn?uri_schema=stun%2Cturn&transport=udp%2Ctcp&ip_ver=ipv4%2Cipv6&servercount=2&api_key=WE6tQjTtPvsRysZJDpTy3CW4bRpDzPjn' + '&ip=' + client.request.connection.remoteAddress;
+      request_uri = config.REST_API_URI + '&ip=' + client.request.connection.remoteAddress;
     } else {
-      request_uri = 'https://brain.lab.vvc.niif.hu/restapi/turn?uri_schema=stun%2Cturn&transport=udp%2Ctcp&ip_ver=ipv4%2Cipv6&servercount=2&api_key=WE6tQjTtPvsRysZJDpTy3CW4bRpDzPjn';
+      request_uri = config.REST_API_URI;
     }
 
     request(request_uri, function (error, response, body) {
       if (!error && response.statusCode == 200) {
         var stunrestanswer = JSON.parse(body);
-        // console.log( stunrestanswer);
         client.restTURN = { urls: stunrestanswer.uris, username: stunrestanswer.username, credential: stunrestanswer.password };
-        // console.log('sending restTURN:', client.restTURN, client.id);
         client.emit('restTURN', {'restTURN' : client.restTURN});
       } else {
-        // console.log("STUN/TURN REST API call: Error: " + error);
         client.emit('restTURN', {'restTURN' : null});
       }
     });
@@ -148,74 +139,49 @@ class Signaling extends EventEmitter {
     this.emit('connection', client);
   }
 
-  processMsgMessage(client, msg, cb) {
+  processMsgMessage(client, msg) {
     var toClient = this.io.to(msg.pid);
     if (!toClient || !msg.pid) {
-      return isFunction(cb)(null, {
-        type: 'info',
-        message: 'not specified a client, should send to the room !'
-      });
+      return;
     }
 
-    msg.from = client.id;
-    toClient.emit('message', msg);
-    isFunction(cb)(null, {
-      type: 'info',
-      message: 'the message is sent'
-    });
+    toClient.emit('message', {'pid' : client.id, 'msg' : msg});
   }
 
-  processServerMessage(client, msg, cb) {
-    return isFunction(cb)(null, {
-      type: 'info',
-      message: 'No server message supported on server...'
-    });
+  processRoomMessage(client, msg) {
+    client.broadcast.to(client.room).emit('room-message', {'pid' : client.id, 'msg' : msg});
+  }
+
+  processServerMessage(client, msg) {
+    console.log('Server message, not handled!');
   }
 
   /*
   * Legacy stuff
   * TODO: remove the following
   */
-  processSDPMessage(client, msg, cb) {
+  processSDPMessage(client, msg) {
     console.log('received sdp %s from %s type: %s > forward to %s ...', msg.sdp, client.id, msg.sdp.type, msg.pid);
-
-    client.broadcast.to(msg.pid).emit('sdp', {'sdp' : msg.sdp , 'pid' : client.id, 'turn' : msg.turn});
-    isFunction(cb)(null, {
-      type: 'info',
-      message: 'the message is sent'
-    });
+    client.broadcast.to(msg.pid).emit('sdp', {'pid' : client.id, 'sdp' : msg.sdp , 'turn' : msg.turn});
   }
 
-  processICEMessage(client, msg, cb) {
-    client.broadcast.to(msg.pid).emit('iceCandidate', {'candidate' : msg.candidate, 'pid' : client.id});
-    isFunction(cb)(null, {
-      type: 'info',
-      message: 'the message is sent'
-    });
+  processICEMessage(client, msg) {
+    client.broadcast.to(msg.pid).emit('iceCandidate', {'pid' : client.id, 'candidate' : msg.candidate});
   }
 
-  processChatMessage(client, msg, cb) {
-    msg.from = client.id;
+  processChatMessage(client, msg) {
     client.broadcast.to(client.room).emit('chat', {'pid' : client.id, 'chat' : msg});
-    isFunction(cb)(null, {
-      type: 'info',
-      message: 'the message is sent'
-    });
   }
 
-  processNameMessage(client, msg, cb) {
+  processNameMessage(client, msg) {
     client.broadcast.to(client.room).emit('name', {'pid' : client.id, 'name' : msg});
-    isFunction(cb)(null, {
-      type: 'info',
-      message: 'the message is sent'
-    });
   }
 }
 
 // End of TODO
 
-module.exports = function (server, options) {
-  return new Signaling(server, options);
+module.exports = function (server) {
+  return new Signaling(server);
 };
 
 module.exports.Signaling = Signaling;
