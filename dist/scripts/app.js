@@ -1400,3 +1400,9 @@ function receiveName(msg) {
   var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
   nameholder.innerHTML = msg.name;
 }
+
+function hangupCall() {
+  if (confirm("Hagnup Call?")) {
+    window.open(window.location.origin, '_self', '');
+  }
+}
