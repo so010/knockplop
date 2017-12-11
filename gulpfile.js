@@ -3,6 +3,9 @@ var gulp = require('gulp'),
   nodemon = require('gulp-nodemon'),
   wiredep = require('wiredep').stream,
   concat = require('gulp-concat');
+  gulpJsonValidator = require('gulp-json-validator');
+  xmlValidator = require('gulp-xml-validator');
+  jsValidate = require('gulp-jsvalidate');
 
 gulp.task('js-process', function(){
   gulp.src('./app/js/*.js')
@@ -20,6 +23,25 @@ gulp.task('css-process', function(){
   .pipe(concat('all.css'))
   .pipe(gulp.dest('./dist/css'));
 });
+
+gulp.task('json-process', function(){
+  gulp.src('./app/manifest.json')
+  .pipe(gulpJsonValidator({ allowDuplicatedKeys: false }))
+  .pipe(gulp.dest('./dist'));
+});
+
+gulp.task('xml-process', function(){
+  gulp.src('./app/browserconfig.xml')
+  .pipe(xmlValidator())
+  .pipe(gulp.dest('./dist'));
+});
+
+gulp.task('sw-process', function(){
+  gulp.src('./app/sw.js')
+  .pipe(jsValidate())
+  .pipe(gulp.dest('./dist'));
+});
+
 
 gulp.task('sass',function(){
   return gulp.src('./app/scss/*.scss')
@@ -51,6 +73,9 @@ gulp.task('watch',function(){
   gulp.watch(['./app/js/*.js'],['js-process']);
   gulp.watch(['./app/**/*.html'],['html-process']);
   gulp.watch(['./app/css/*.css'],['css-process']);
+  gulp.watch(['./app/manifest.json'],['json-process']);
+  gulp.watch(['./app/browserconfig.xml'],['xml-process']);
+  gulp.watch(['./app/sw.js'],['sw-process']);
 });
 
 

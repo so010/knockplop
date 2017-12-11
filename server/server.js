@@ -19,7 +19,12 @@ var httpServer = http.createServer(httpApp);
 console.log(__dirname);
 
 app.use(express.static(path.resolve(__dirname + '/../bower_components')));
-app.use('/pix',express.static(path.resolve(__dirname + '/../pix')));
+
+app.use('/img',express.static(__dirname + '/../dist/img'));
+app.use('/manifest.json',express.static(__dirname + '/../dist/manifest.json'));
+app.use('/browserconfig.xml',express.static(__dirname + '/../dist/browserconfig.xml'));
+app.use('/sw.js',express.static(__dirname + '/dist/sw.js'));
+
 app.use('/scripts',express.static(path.resolve(__dirname + '/../dist/scripts')));
 app.use('/css',express.static(path.resolve(__dirname + '/../dist/css')));
 app.use('/client-config.js',express.static(path.resolve(__dirname + '/../client-config.js')));

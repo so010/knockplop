@@ -1,7 +1,35 @@
 <!DOCTYPE html>
+<script>
+    //This is the "Offline page" service worker
+
+    //Add this below content to your HTML page, or add the js file to your page at the very top to register sercie worker
+    if (navigator.serviceWorker.controller) {
+      console.log('[PWA] - active service worker found, no need to register')
+    } else {
+      //Register the ServiceWorker
+      navigator.serviceWorker.register('sw.js', {
+        scope: './'
+      }).then(function(reg) {
+        console.log('[PWA] - Service worker has been registered for scope:'+ reg.scope);
+      });
+    }
+
+</script>
 <html>
   <head>
     <meta charset="utf-8">
+
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Knockplop WPA">
+
+    <meta name="description" content="Knockplop WebRTC App.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#456BD9">
+
+    <meta http-equiv="x-ua-Compatible" content="ie=edge">
+    <meta name="msapplication-config" content="/browserconfig.xml">
+
     <title>Meet</title>
   </head>
   <style>
