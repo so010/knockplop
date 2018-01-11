@@ -1,6 +1,6 @@
 'use strict';
 
-var config = require('../server-config');
+const server_config = require('../server-config');
 
 const util = require('util');
 const ws = require('socket.io');
@@ -129,9 +129,9 @@ class Signaling extends EventEmitter {
     var config = this.config;
 
     if (client.request.connection.remoteAddress) {
-      request_uri = config.REST_API_URI  + '&ip=' + client.request.connection.remoteAddress;
+      request_uri = server_config.REST_API_URI  + '&ip=' + client.request.connection.remoteAddress;
     } else {
-      request_uri = config.REST_API_URI;
+      request_uri = server_config.REST_API_URI;
     }
 
     request(request_uri, function (error, response, body) {
