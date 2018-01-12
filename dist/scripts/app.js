@@ -443,6 +443,21 @@ function initSocket() {
       var restTURN = msg.restTURN;
       var testIceServers = []
       for (var j in restTURN.urls) {
+        switch (adapter.browserDetails.browser) {
+        case 'chrome':
+            console.log(restTURN.urls[j].match("^(turns).*$"));
+            if ( restTURN.urls[j].match("^(turns).*$") ) {
+                       console.log("-= Ignore turns. Chrome workaround =-");
+                       continue;
+            }
+            break;
+        case 'firefox':
+            if (restTURN.urls[j].match("^turn[s]?:[\[](.*)$")) {
+                       console.log("-= Ignore IPv6 TURN Firefox workaround =-");
+                       continue;
+            }
+            break;
+        }
         var turnServer = {};
         turnServer.username = restTURN.username;
         turnServer.credential = restTURN.credential;
