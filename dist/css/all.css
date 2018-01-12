@@ -38,29 +38,50 @@
   color: rgba(255, 255, 255, 0.3); }
 
 body {
+  background: url("background.svg") no-repeat center center fixed;
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+  background-color: transparent; }
+
+.bodyroom {
   margin: 0;
   padding: 0;
-  border: 0;
-  background-color: transparent;
-  background-image: url("background.svg");
-  background-repeat: no-repeat;
-  background-size: 100% 100%; }
+  border: 0; }
+
+.startdiv {
+  margin: auto;
+  padding: 0;
+  text-align: center;
+  position: fixed;
+  left: 50%;
+  top: 20%;
+  transform: translate(-50%, 0%);
+  width: 100vw;
+  height: 100vh;
+  font-size: 1em; }
+
+.startinput[type=text] {
+  font-size: 2em; }
+
+.startbutton {
+  font-size: 2em; }
 
 .logo {
   position: fixed;
-  top: 10px;
-  left: 10px;
-  height: 10vh;
-  z-index: 0; 
-  height: 10vh;
+  top: 20px;
+  left: 20px;
+  height: 7vh;
+  z-index: 0;
   -webkit-filter: drop-shadow(0px 0px 3px #222);
   filter: drop-shadow(0px 0px 3px #222); }
 
 .logoStartscreen {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  height: 8vh; }
+  height: 15vh;
+  margin-bottom: 10vh;
+  -webkit-filter: drop-shadow(0px 0px 3px #222);
+  filter: drop-shadow(0px 0px 3px #222); }
 
 #videoDivWrapper {
   height: 85vh;

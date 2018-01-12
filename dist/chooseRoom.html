@@ -4,36 +4,18 @@
     <meta charset="utf-8">
     <title>Meet</title>
     <link rel="icon" href="/css/community-152-74185.png" sizes="32x32">
+    <link rel="stylesheet" type="text/css" href="css/all.css">
+    <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' name='viewport' />
+
   </head>
-  <style>
-    body{
-      margin:auto;
-      padding:0;
-      text-align:center;
-      position: fixed;
-      left: 50%;
-      top: 40%;
-      transform: translate(-50%, 0%);
-      width:100vw;
-      height:100vh
-      font-size:3em;
-      background-color:rgba(0,0,0,0);
-      background-image: url("css/background.svg");
-      background-repeat: no-repeat;
-    }
-    input[type=text]{
-      font-size:2em;
-    }
-    button{
-      font-size:2em;
-    }
-  </style>
   <body>
-    <a>
-      <img class="logoStartscreen" src="css/logo.svg" viewbox="0 0 50 10"></img><br>
-    </a>
-    <input id="room" type="text" onkeypress="checkEnter(event)" value="" placeholder="your room name">
-    <button onclick = "start(location.href)">enter your room</button>
+    <div  class="startdiv">
+      <a>
+        <img class="logoStartscreen" src="css/logo.svg" viewbox="0 0 50 10"></img><br>
+      </a>
+      <input id="room" class="startinput" type="text" onkeypress="checkEnter(event)" value="" placeholder="your room name">
+      <button class="startbutton" onclick = "start(location.href)">enter your room</button>
+    </div>
   </body>
   <script>
     var room = document.getElementById("room");
