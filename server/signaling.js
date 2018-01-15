@@ -123,6 +123,7 @@ class Signaling extends EventEmitter {
     client.on('iceCandidate', this.processICEMessage.bind(this, client));
     client.on('chat', this.processChatMessage.bind(this, client));
     client.on('name', this.processNameMessage.bind(this, client));
+    client.on('magnetURI', this.processMagnetMessage.bind(this, client));
     // End of TODO
 
     var request_uri;
@@ -207,6 +208,13 @@ class Signaling extends EventEmitter {
 
   processNameMessage(client, msg, cb) {
     client.broadcast.to(client.room).emit('name', {'pid' : client.id, 'name' : msg});
+    isFunction(cb)(null, {
+      type: 'info',
+      message: 'the message is sent'
+    });
+  }
+  processMagnetMessage(client, msg, cb) {
+    client.broadcast.to(client.room).emit('magnetURI', {'pid' : client.id, 'magnetURI' : msg});
     isFunction(cb)(null, {
       type: 'info',
       message: 'the message is sent'
