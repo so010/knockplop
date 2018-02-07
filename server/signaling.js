@@ -1,5 +1,7 @@
 'use strict';
 
+const server_config = require('../server-config');
+
 const util = require('util');
 const ws = require('socket.io');
 const EventEmitter = require('events');
@@ -127,9 +129,9 @@ class Signaling extends EventEmitter {
     var config = this.config;
 
     if (client.request.connection.remoteAddress) {
-      request_uri = 'https://brain.lab.vvc.niif.hu/restapi/turn?uri_schema=stun%2Cturn&transport=udp%2Ctcp&ip_ver=ipv4%2Cipv6&servercount=2&api_key=WE6tQjTtPvsRysZJDpTy3CW4bRpDzPjn' + '&ip=' + client.request.connection.remoteAddress;
+      request_uri = server_config.REST_API_URI  + '&ip=' + client.request.connection.remoteAddress;
     } else {
-      request_uri = 'https://brain.lab.vvc.niif.hu/restapi/turn?uri_schema=stun%2Cturn&transport=udp%2Ctcp&ip_ver=ipv4%2Cipv6&servercount=2&api_key=WE6tQjTtPvsRysZJDpTy3CW4bRpDzPjn';
+      request_uri = server_config.REST_API_URI;
     }
 
     request(request_uri, function (error, response, body) {
