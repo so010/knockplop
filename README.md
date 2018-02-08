@@ -52,3 +52,6 @@ and run gulp:
 gulp
 ```
 
+### Realated Projects
+
+- Moodle integration: [knockplop-moodle](https://github.com/misi/knockplop-moodle)
