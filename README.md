@@ -55,3 +55,4 @@ gulp
 ### Realated Projects
 
 - Moodle integration: [knockplop-moodle](https://github.com/misi/knockplop-moodle)
+- Chrome Screen Share Plugin: [knockplop-chrome-plugin](https://github.com/misi/knockplop-chrome-plugin)
