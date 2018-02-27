@@ -148,7 +148,15 @@ function initSocket() {
                        console.log("-= Ignore IPv6 TURN Firefox workaround =-");
                        continue;
             }
-            break;
+            if ( restTURN.urls[j].match("^(turns).*$") ) {
+                       console.log("-= Ignore turns. Firefox workaround =-");
+                       continue;
+            }
+            if ( restTURN.urls[j].match("^.*transport=tcp$") ) {
+                       console.log("-= Ignore TCP. Firefox workaround =-");
+                       continue;
+            }
+             break;
         }
         var turnServer = {};
         turnServer.username = restTURN.username;
