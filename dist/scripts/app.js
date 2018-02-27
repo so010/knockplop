@@ -557,7 +557,7 @@ function createPeerConnection(pid,turn) {
 
     var pc = new RTCPeerConnection(peerConnectionConfig);
     pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
-    pc.onaddstream = function (event){addStream(event.stream,pid)};
+    pc.ontrack = function (event){addStream(event.streams[0],pid)};
     pc.onnegotiationneeded = handleRenegotiation;
     return pc;
 }
@@ -579,12 +579,12 @@ function receivedDescription(msg){
       participantList[msg.pid]={};
       participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
       if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
-        participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+        participantList[msg.pid].peerConnection.ontrack = function (event){addStream(event.streams[0],msg.pid)};
         participantList[msg.pid].peerConnection.addStream(localStream)
       } else {
         // TODO: this is a ugly hack and should be handled somewhere else:
-        participantList[msg.pid].peerConnection.onaddstream = function (event){
-          replaceStream(event.stream,'localVideo')
+        participantList[msg.pid].peerConnection.ontrack = function (event){
+          replaceStream(event.streams[0],'localVideo')
           document.getElementById("joinButton").classList.remove('hidden')
         }
       }
