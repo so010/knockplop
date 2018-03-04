@@ -387,8 +387,41 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
     if (pid != "localVideo") {
       // Changing streams of a connected peer connection will trigger SDP renegotiation.
       var pc = participantList[pid].peerConnection;
+      var senders = pc.getSenders();
+      if (typeof senders[0].replaceTrack == "function") {
+        console.log("Misi: Replace Track");
+        senders().map(sender => { if (sender.track.kind == "video") {
+         sender.replaceTrack(newStream.getVideoTracks()[0])}
+        })
+      } else {
+          if (typeof pc.removeTrack == "function" && typeof pc.addTrack == "function") {
+          console.log("Misi: add/removeTrack");
+          senders.map(sender => {
+            //if (sender.track.kind == "video") {
+              console.log(sender.track);
+              pc.removeTrack(sender);
+            //}
+          });
+          newStream.getTracks().map(track => { pc.addTrack(track, newStream);});
+          //Start Offer
+          pc.createOffer().then(function(offer) {
+            return pc.setLocalDescription(offer);
+          }).then(function() {
+            // Send this new offer to this participant.
+            sendSDP(pc.localDescription, pid);
+            }).catch(errorHandler);
 
-      pc.getSenders().map(sender => { if (sender.track.kind == "video") sender.replaceTrack(newStream.getVideoTracks()[0])});
+          renegotiationNeeded = true;
+
+        } else {
+
+          pc.removeStream(oldStream);
+          console.log("Misi: Renegitiation");
+          pc.addStream(newStream);
+          renegotiationNeeded = true;
+
+        }
+      };
     }
   }
 }
@@ -404,13 +437,15 @@ function handleRenegotiation() {
   // Go through the list of participants and send each one a new SDP.
   for (var pid in participantList) {
     if (pid != "localVideo") {
-      var pc = participantList[pid].peerConnection;
-      pc.createOffer().then(function(offer) {
-        return pc.setLocalDescription(offer);
-      }).then(function() {
-        // Send this new offer to this participant.
-        sendSDP(pc.localDescription, pid);
-      }).catch(errorHandler);
+      if (pc.signalingState=="stable") {
+        var pc = participantList[pid].peerConnection;
+        pc.createOffer().then(function(offer) {
+          return pc.setLocalDescription(offer);
+        }).then(function() {
+          // Send this new offer to this participant.
+          sendSDP(pc.localDescription, pid);
+        }).catch(errorHandler);
+      }
     }
   }
 }
