@@ -78,18 +78,9 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
   for (var pid in participantList) {
     if (pid != "localVideo") {
       // Changing streams of a connected peer connection will trigger SDP renegotiation.
-      renegotiationNeeded = true;
-
       var pc = participantList[pid].peerConnection;
-      if ("removeTrack" in pc) {
-        pc.removeTrack(pc.getSenders()[0]);
-      } else {
-        pc.removeStream(oldStream);
-      }
 
-      // TODO use addTrack instead of addStream?
-      // pc.addTrack(stream.getVideoTracks()[0], stream);
-      pc.addStream(newStream);
+      pc.getSenders().map(sender => { if (sender.track.kind == "video") sender.replaceTrack(newStream.getVideoTracks()[0])});
     }
   }
 }
@@ -249,7 +240,7 @@ function createPeerConnection(pid,turn) {
 
     var pc = new RTCPeerConnection(peerConnectionConfig);
     pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
-    pc.ontrack = function (event){addStream(event.streams[0],pid)};
+    pc.ontrack = function (event){addStream(event.streams[0],pid);};
     pc.onnegotiationneeded = handleRenegotiation;
     return pc;
 }
@@ -271,7 +262,7 @@ function receivedDescription(msg){
       participantList[msg.pid]={};
       participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
       if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
-        participantList[msg.pid].peerConnection.ontrack = function (event){addStream(event.streams[0],msg.pid)};
+        participantList[msg.pid].peerConnection.ontrack = function (event){addStream(event.streams[0],msg.pid);};
         participantList[msg.pid].peerConnection.addStream(localStream)
       } else {
         // TODO: this is a ugly hack and should be handled somewhere else:
@@ -431,7 +422,7 @@ function addStream( stream, pid ) {
 }
 
 function replaceStream( stream, pid ) {
-  document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream
+  document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream;
 }
 
 function forceRedraw (element){
@@ -855,7 +846,7 @@ function audioAnalyser(stream) {
 function getScreen(){
   var constraints = {
     audio: true,
-    video: { mediaSource: "screen" }
+    video: { mediaSource: 'screen'}
   };
 
   if(adapter.browserDetails.browser === 'chrome') {
