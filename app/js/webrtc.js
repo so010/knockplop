@@ -81,8 +81,7 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
       var pc = participantList[pid].peerConnection;
       var senders = pc.getSenders();
       if (typeof senders[0].replaceTrack == "function") {
-        console.log("Misi: Replace Track");
-        senders().map(sender => { if (sender.track.kind == "video") {
+         senders.map(sender => { if (sender.track.kind == "video") {
          sender.replaceTrack(newStream.getVideoTracks()[0])}
         })
       } else {
