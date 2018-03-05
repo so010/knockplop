@@ -86,12 +86,9 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
         })
       } else {
           if (typeof pc.removeTrack == "function" && typeof pc.addTrack == "function") {
-          console.log("Misi: add/removeTrack");
           senders.map(sender => {
-            //if (sender.track.kind == "video") {
-              console.log(sender.track);
-              pc.removeTrack(sender);
-            //}
+            console.log(sender.track);
+            pc.removeTrack(sender);
           });
           newStream.getTracks().map(track => { pc.addTrack(track, newStream);});
           //Start Offer
@@ -107,7 +104,6 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
         } else {
 
           pc.removeStream(oldStream);
-          console.log("Misi: Renegitiation");
           pc.addStream(newStream);
           renegotiationNeeded = true;
 

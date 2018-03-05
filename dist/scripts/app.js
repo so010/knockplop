@@ -389,18 +389,14 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
       var pc = participantList[pid].peerConnection;
       var senders = pc.getSenders();
       if (typeof senders[0].replaceTrack == "function") {
-        console.log("Misi: Replace Track");
-        senders().map(sender => { if (sender.track.kind == "video") {
+         senders.map(sender => { if (sender.track.kind == "video") {
          sender.replaceTrack(newStream.getVideoTracks()[0])}
         })
       } else {
           if (typeof pc.removeTrack == "function" && typeof pc.addTrack == "function") {
-          console.log("Misi: add/removeTrack");
           senders.map(sender => {
-            //if (sender.track.kind == "video") {
-              console.log(sender.track);
-              pc.removeTrack(sender);
-            //}
+            console.log(sender.track);
+            pc.removeTrack(sender);
           });
           newStream.getTracks().map(track => { pc.addTrack(track, newStream);});
           //Start Offer
@@ -416,7 +412,6 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
         } else {
 
           pc.removeStream(oldStream);
-          console.log("Misi: Renegitiation");
           pc.addStream(newStream);
           renegotiationNeeded = true;
 
