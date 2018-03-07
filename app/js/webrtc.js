@@ -78,18 +78,37 @@ function changeStreamsInPeerConnections(oldStream, newStream) {
   for (var pid in participantList) {
     if (pid != "localVideo") {
       // Changing streams of a connected peer connection will trigger SDP renegotiation.
-      renegotiationNeeded = true;
-
       var pc = participantList[pid].peerConnection;
-      if ("removeTrack" in pc) {
-        pc.removeTrack(pc.getSenders()[0]);
+      var senders = pc.getSenders();
+      if (typeof senders[0].replaceTrack == "function") {
+         senders.map(sender => { if (sender.track.kind == "video") {
+         sender.replaceTrack(newStream.getVideoTracks()[0])}
+        })
       } else {
-        pc.removeStream(oldStream);
-      }
+          if (typeof pc.removeTrack == "function" && typeof pc.addTrack == "function") {
+          senders.map(sender => {
+            console.log(sender.track);
+            pc.removeTrack(sender);
+          });
+          newStream.getTracks().map(track => { pc.addTrack(track, newStream);});
+          //Start Offer
+          pc.createOffer().then(function(offer) {
+            return pc.setLocalDescription(offer);
+          }).then(function() {
+            // Send this new offer to this participant.
+            sendSDP(pc.localDescription, pid);
+            }).catch(errorHandler);
 
-      // TODO use addTrack instead of addStream?
-      // pc.addTrack(stream.getVideoTracks()[0], stream);
-      pc.addStream(newStream);
+          renegotiationNeeded = true;
+
+        } else {
+
+          pc.removeStream(oldStream);
+          pc.addStream(newStream);
+          renegotiationNeeded = true;
+
+        }
+      }
     }
   }
 }
