@@ -29,8 +29,8 @@ gulp.task('sass',function(){
 
 gulp.task('serve', function () {
     nodemon({
-        script  : 'server.js',
-        watch   : 'server.js'
+        script  : 'server/server.js',
+        watch   : 'server/server.js'
         //...add nodeArgs: ['--debug=5858'] to debug
         //..or nodeArgs: ['--debug-brk=5858'] to debug at server start
     });

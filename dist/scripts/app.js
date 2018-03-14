@@ -1,90 +1,522 @@
+"use strict";
 
+var iceServerManager = {
+  iceServers:[], // here put we all tested and working iceServers in
+  testIceServers:[], // the array of iceServers we are going to test (queue)
+  disabledIceServers:[], // iceServers that are not working 
+  fastestUdpTurnServer:null, // fastest found TURN server for udp
+  fastestTcpTurnServer:null, // fastest found TURN server for tcp
+  callbacks:[], // array of callback functions
+  progressEvent:null, // this will be called for progress info
+  runningTests:{}, // list of running tests
+
+  restart : function(callback){
+    this.fastestUdpTurnServer = null
+    this.fastestTcpTurnServer = null
+    var servers = this.iceServers.splice(0,this.iceServers.length - 1)
+    for ( var i = 0 ; i < this.disabledIceServers.length; i++ ) {
+      servers.push(this.disabledIceServers.splice(i,1)[0])
+    }
+    this.startTesting(servers,callback)
+  },
+
+  startTesting : function(iceServers,callback,progressEvent){ 
+    if(callback && typeof callback == "function"){
+      this.callbacks.push(callback)
+    }
+    if(progressEvent && typeof progressEvent == "function"){
+      this.progressEvent = progressEvent
+    }
+    if ( iceServers.length == 0 ) return
+    var workerCount = 18 // number of max peerconnection to open for testing
+    //  no STUN-server testing yet so just moving them to iceServers array:    
+    for ( var i = 0 ; i < iceServers.length; i++ ) {
+      if ( iceServers[i].urls.indexOf('stun') != -1 ) {
+        this.iceServers.push(iceServers.splice(i,1)[0])
+      }
+    }
+    // pushing iceServers to my local testIceServers array for later use    
+    Array.prototype.push.apply(this.testIceServers,iceServers)
+    // TURN Server testing: not all at the same time to reduce network issues and Firefox problems with to many PeerConnections
+    for ( var i = 1; i <= workerCount; i++ ){
+      setTimeout(this.turnServerTest.bind(this) ,0)
+    }
+  },
+
+  onTurnServerTested : function(turnServer){
+    delete this.runningTests[turnServer.urls]
+    if ( turnServer.status == 'tested' ) { 
+      this.iceServers.push(turnServer)
+      if ( turnServer.urls.indexOf('udp') != -1 ) {
+        if ( this.fastestUdpTurnServer == null || turnServer.rtt < this.fastestUdpTurnServer.rtt ) {
+          this.fastestUdpTurnServer = turnServer
+        }
+      } else { // tcp
+        if ( this.fastestTcpTurnServer == null || turnServer.rtt < this.fastestTcpTurnServer.rtt ) {
+          this.fastestTcpTurnServer = turnServer
+        }
+      }
+    }
+    else { 
+      if ( turnServer.status == 'disabled' ) {
+        this.disabledIceServers.push(turnServer)
+      }
+    }
+    delete turnServer.rttTester
+    console.log ( 'onTurnServerTested: ' + turnServer.urls + ' status: ' + turnServer.status + ' rtt: ' + turnServer.rtt) 
+    // sending progress info
+    if ( this.progressEvent != null ) { 
+      var progress = ( this.disabledIceServers.length + this.iceServers.length ) / 
+        ( this.testIceServers.length + Object.keys(this.runningTests).length + this.iceServers.length + this.disabledIceServers.length ) 
+      this.progressEvent(progress) 
+    }
+    // call the callbacks if nothing left to test and no tests are still running
+    if ( this.testIceServers.length == 0 ) {
+      if ( Object.keys(this.runningTests).length == 0 ) { 
+        while ( this.callbacks.length > 0 ) {
+          this.callbacks.pop()()
+        }
+      }
+    } else { 
+      // test next Server
+      this.turnServerTest()
+    }
+  },
+
+  turnServerTest : function(){
+    if ( this.testIceServers.length == 0 ) { return }
+    console.log('turnServerTest 1 worker started, testQueue: ' + 
+                this.testIceServers.length + ' tested: ' + 
+                this.iceServers.length) 
+   var testIceServer = this.testIceServers.shift()
+    console.log('turnServerTest: ' + testIceServer.urls) 
+    if ( testIceServer.urls.indexOf('turn') != -1 ) { // TURN-servers only
+      testIceServer.rttTester = new RttTester(this.onTurnServerTested.bind(this), testIceServer)
+      this.runningTests[testIceServer.urls] = true
+    }
+    else{ // this should not happen(all STUN servers should be moved before this is executed) but you never know
+      this.iceServers.push(testIceServer)
+      this.turnServerTest()
+    }
+  },
+
+// this returns all known TURN servers including STUN []
+  getIceServers : function(){
+    var servers = []
+    for ( var i in this.iceServers ) {
+    var server = {}
+      server.urls = this.iceServers[i].urls
+      if ( typeof this.iceServers[i].credential != 'undefined' ) server.credential = this.iceServers[i].credential
+      if ( typeof this.iceServers[i].username != 'undefined' ) server.username = this.iceServers[i].username
+      if ( typeof this.iceServers[i].rtt != 'undefined' ) server.rtt = this.iceServers[i].rtt
+      servers.push(server)
+    }
+    return servers
+  },
+
+// this returns all known TURN servers []
+  getTurnServers : function(){
+    var servers = []
+    for ( var i in this.iceServers ) {
+      if ( this.iceServers[i].urls.indexOf('turn') != -1 ) {
+        var server = {}
+        server.urls = this.iceServers[i].urls
+        if ( typeof this.iceServers[i].credential != 'undefined' ) server.credential = this.iceServers[i].credential
+        if ( typeof this.iceServers[i].username != 'undefined' ) server.username = this.iceServers[i].username
+        if ( typeof this.iceServers[i].rtt != 'undefined' ) server.rtt = this.iceServers[i].rtt
+        servers.push(server)
+      }
+    }
+    return servers
+  },
+
+
+// this returns one UDP-TURN, one TCP-TURN and one STUN server []
+// , returned TURN servers are the ones with fastest measured round trip time
+  getFastestIceServers : function() {
+    var servers = []
+    // get one stunserver:
+    var i = 0
+    while ( ( this.iceServers[i].urls.indexOf('stun') == -1 ) && ( i < this.iceServers.length - 1 ) ) { i++ }
+    if ( i < this.iceServers.length ) servers.push(this.iceServers[i])
+    // and the fastest udp TURN server:
+    if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
+    // and the fastest tcp TURN server:
+    if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
+    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
+    return servers
+  },
+
+// this returns one UDP-TURN and one TCP-TURN server [], no STUN Server here included
+// returned TURN servers are the ones with fastest measured round trip time
+  getFastestTurnServers : function() {
+    var servers = []
+    // get the fastest udp TURN server:
+    if ( this.fastestUdpTurnServer != null) servers.push(this.fastestUdpTurnServer)
+    // and the fastest tcp TURN server:
+    if ( this.fastestTcpTurnServer != null) servers.push(this.fastestTcpTurnServer)
+    if ( servers.length == 0 ) servers.push(this.disabledIceServers)
+    return servers
+  },
+}
+
+"use strict";
+
+function RttTester (callback,turnServer){
+  var dataChannelOptions = {
+    ordered: false, 
+    maxRetransmits: 0,
+  }
+  this.pingTime = 0
+  this.pingCount = 0
+  this.rtt = null
+  this.pongTime = 0
+  this.pingTimer
+  this.watchDogCounter = 0
+  this.watchDogTimeoutStartValue = 2600
+  this.watchDogTimeout = this.watchDogTimeoutStartValue
+  this.turnServer = turnServer
+
+  this.setStatus = function(status){
+    this.turnServer.status = status;
+    if ( status == 'tested' || status == 'disabled') {
+      this.turnServer.rtt = this.rtt
+      callback(this.turnServer)
+      return
+    }
+  }
+
+  this.gotLocalIceCandidate = function(e){
+    if ( e.candidate ) {
+      // filter only for the relay candidate:
+      if ( e.candidate.candidate.indexOf('relay') !== -1 ) {
+ //       console.log('addIceCandidate to remotePC:',e.candidate.candidate,this.turnServer.urls);
+        this.remotePC.addIceCandidate(e.candidate)
+      }
+    }
+  }
+
+  this.gotRemoteIceCandidate = function(e){
+    if ( e.candidate ) {
+      // filter only for the relay candidate:
+      if ( e.candidate.candidate.indexOf('relay') !== -1 ) {
+        this.localPC.addIceCandidate(e.candidate)
+      }
+    }
+  }
+
+  this.gotLocalDescription = function(desc){
+    this.answerCreated = function(desc){
+      this.remotePC.setLocalDescription(desc).then(function () {},function () {});
+      this.localPC.setRemoteDescription(desc).then(function () {},function () {});
+    }
+    this.setRemoteDescriptionSuccess = function(desc) {
+      this.remotePC.createAnswer().then(function(desc) {this.answerCreated(desc)}.bind(this), 
+          function(error) { console.log('ERROR: remotePC.createAnswer()',error)});
+    }
+    this.localPC.setLocalDescription(desc);
+    this.remotePC.setRemoteDescription(desc).then(
+        function () {this.setRemoteDescriptionSuccess(desc)}.bind(this),
+        function (error) {console.log('ERROR: remotePC.setRemoteDescription(desc)',error)}); 
+  }
+
+  this.iceConnectionStateChanged = function(e){
+//    console.log('rttTester: iceConnectionStateChanged: ' + this.turnServer.urls + ': ' + e.target.iceConnectionState)
+  }
+
+  this.watchDog = function(){
+    if ( this.watchDogCounter >= 1 ) {
+      this.setStatus("disabled")
+      this.localPC.close()
+      this.localPC = {}
+      this.remotePC.close()
+      this.remotePC = {}
+      return
+    }
+    this.watchDogCounter++;
+//    console.log('watchDog: ' + this.turnServer.urls + ' ' + this.watchDogCounter + '. WOOF!');
+//    this.watchDogTimeout = this.watchDogTimeout + 1000;
+    this.watchDogTimer = window.setTimeout(this.watchDog.bind(this), this.watchDogTimeout);
+    if ( this.localPC.iceConnectionState == 'connected'  ) {
+      this.startPing.bind(this);
+    }
+  }
+
+  this.startPing = function(){
+    var d = new Date();
+    var pingStart = d.getTime()
+    this.localDataChannel.send(JSON.stringify(pingStart))
+//    console.log(this.turnServer.urls +': pingStart: '/
+  }
+
+  this.onDataChannel = function(event){
+    this.remoteDataChannel = event.channel;
+    this.remoteDataChannel.onmessage = this.receivedPing.bind(this)
+  }
+
+  this.receivedPing = function(event){
+    var d = new Date(); 
+    var pingEnd = d.getTime();
+    var pingTime = pingEnd - JSON.parse(event.data); 
+    this.remoteDataChannel.send(JSON.stringify(pingEnd))
+    this.pingTime = (this.pingTime * this.pingCount + pingTime) / ( this.pingCount + 1 ) 
+    clearTimeout(this.watchDogTimer)
+    this.watchDogTimeout = this.watchDogTimeoutStartValue
+    this.watchDogTimer = window.setTimeout(this.watchDog.bind(this), this.watchDogTimeout)
+  }
+
+  this.receivedPong = function(event){
+    this.watchDogCounter = 0;
+    var d = new Date();
+    var pongEnd = d.getTime(); 
+    var pongTime = pongEnd - JSON.parse(event.data);
+    this.pongTime = ( this.pongTime * this.pingCount + pongTime ) / ( this.pingCount + 1 )
+    var rtt = this.pingTime + this.pongTime;
+    this.rtt = ( this.rtt * this.pingCount + rtt ) / ( this.pingCount + 1 )
+    clearTimeout(this.watchDogTimer)
+    this.watchDogTimeout = this.watchDogTimeoutStartValue
+    this.watchDogTimer = window.setTimeout(this.watchDog.bind(this), this.watchDogTimeout)
+    if ( this.pingCount < 15 ){
+      this.pingCount++
+      this.startPing.bind(this)()
+    }
+    else {
+      clearTimeout(this.watchDogTimer)
+      this.localPC.close()
+      this.remotePC.close()
+      this.setStatus('tested')
+    }
+  }
+  this.setStatus('testing')
+  if(callback && typeof callback == "function"){
+    this.callback = callback;
+  }
+  this.localPC = new RTCPeerConnection({'iceServers':[this.turnServer]});
+  this.localPC.onicecandidate = function(e) {this.gotLocalIceCandidate(e)}.bind(this) 
+  this.localPC.oniceconnectionstatechange = function(e) {this.iceConnectionStateChanged(e)}.bind(this)
+  this.localDataChannel = this.localPC.createDataChannel("rtt",dataChannelOptions);
+  this.localDataChannel.onopen = this.startPing.bind(this);
+  this.localDataChannel.onmessage = this.receivedPong.bind(this); 
+  this.remotePC = new RTCPeerConnection({'iceServers':[this.turnServer]});
+  this.remotePC.onicecandidate = function(e) {this.gotRemoteIceCandidate(e)}.bind(this)
+  this.remotePC.ondatachannel = this.onDataChannel.bind(this);
+  this.localPC.createOffer().then(
+    function(offer) {this.gotLocalDescription(offer)}.bind(this),
+    function (error) {console.log('ERROR: localPC.createOffer()',this.turnServer.urls,error)}.bind(this));
+  this.watchDogTimer = window.setTimeout(this.watchDog.bind(this), this.watchDogTimeout);
+}
+
+"use strict";
 var localVideo;
+var localStream;
 var socket;
 var participantList={};
+var userPid;
 var videoContainer,videoContainerChanged,bigVideoContainer;
 var room;
 var dragLastOver,dragSource;
 var hidingElementsStatus = "visible";
 var restTURN;
-
-function pageReady() {
-  room = document.URL.split("/")[3];
-  localVideo = document.getElementById('localVideo');
-  videoContainer = document.getElementById('videoContainer');
-  bigVideoContainer = document.getElementById('bigVideoContainer');
-
-  var constraints = {
-    audio: true,
-    video: {
-        "width": {"min": "50","ideal":"1280",  "max": "1920"},
-        "height": {"min": "50","ideal":"768",  "max": "1050"}
-      }
-  };
-
-  if(navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(constraints).then(getUserMediaSuccess).catch(pageReady);
-  } else {
-      alert('Your browser does not support getUserMedia API');
-  }
-  window.addEventListener('resize', redrawVideoContainer);
-  window.setTimeout(checkVideoContainer, 2500);
-  fadeOutTimer = window.setTimeout(fadeOutElements, [3000]);
-}
+var fadeOutTimer;
+var progressBar = {}
+var webtorrentClient = {}
+var dragDrop = {}
+var screensharing = false;
+var renegotiationNeeded = false;
+var chatHidden = true;
+var notificationHidden = true;
+var unreadMessages = 0;
+var userName = "";
+var chatMessages = [];
 
 function redrawVideoContainer () {
   videoContainer.style.display = 'none'
   setTimeout(function(){videoContainer.style.display = 'inline-block'},10);
 }
 
-function getUserMediaSuccess(stream) {
-    localStream = stream;
-    participantList["localStream"] = {};
-    addStream( stream, "localStream" );
-    initSocket();
+function setIsScreensharing(isScreensharing) {
+  screensharing = isScreensharing;
+  document.getElementById('screenshareIcon').innerHTML = screensharing ? 'stop_screen_share' : 'screen_share';
+}
+
+function getScreenSuccess (stream) {
+  setIsScreensharing(true);
+  stream.type = 'screen'
+  var prevLocalStream = localStream;
+  localStream = stream;
+  participantList["localVideo"].screenStream = stream
+  document.querySelector('video').srcObject = stream;
+  changeStreamsInPeerConnections(prevLocalStream, stream);
+}
+
+function getChromeScreenSuccess(screenStream) {
+  // Chrome (as of 59) doesn't allow the microphone to be retrieved when requesting screen sharing, so the workaround
+  // (as described in https://stackoverflow.com/a/20063211) is to request the microphone separately, and then add its audio track to the screen stream.
+  var audioOnlyConstraints = {
+    audio: true,
+    video: false
+  }
+  console.debug("Chrome: attempting to retrieve local microphone for screensharing");
+  navigator.mediaDevices.getUserMedia(audioOnlyConstraints).then(function(audioStream) {
+    screenStream.addTrack(audioStream.getAudioTracks()[0]);
+    console.log("Chrome: using screen stream with audio track");
+    getScreenSuccess(screenStream);
+  }).catch(errorHandler);
+}
+
+function getCamSuccess(stream) {
+  setIsScreensharing(false);
+  stream.type = 'camera'
+  var prevLocalStream = localStream;
+  localStream = stream;
+  if (participantList["localVideo"]) {
+    delete participantList["localVideo"].screenStream;
+    document.querySelector('video').srcObject = stream;
+    changeStreamsInPeerConnections(prevLocalStream, stream);
+  } else {
+    participantList["localVideo"] = {};
+    addStream( stream, "localVideo" );
+    setGlobalMessage('Test remote streaming:')
+    mirrorMe()
+    audioAnalyser(stream)
+  }
+}
+
+function changeStreamsInPeerConnections(oldStream, newStream) {
+  for (var pid in participantList) {
+    if (pid != "localVideo") {
+      // Changing streams of a connected peer connection will trigger SDP renegotiation.
+      var pc = participantList[pid].peerConnection;
+      var senders = pc.getSenders();
+      if (typeof senders[0].replaceTrack == "function") {
+         senders.map(sender => { if (sender.track.kind == "video") {
+         sender.replaceTrack(newStream.getVideoTracks()[0])}
+        })
+      } else {
+          if (typeof pc.removeTrack == "function" && typeof pc.addTrack == "function") {
+          senders.map(sender => {
+            console.log(sender.track);
+            pc.removeTrack(sender);
+          });
+          newStream.getTracks().map(track => { pc.addTrack(track, newStream);});
+          //Start Offer
+          pc.createOffer().then(function(offer) {
+            return pc.setLocalDescription(offer);
+          }).then(function() {
+            // Send this new offer to this participant.
+            sendSDP(pc.localDescription, pid);
+            }).catch(errorHandler);
+
+          renegotiationNeeded = true;
+
+        } else {
+
+          pc.removeStream(oldStream);
+          pc.addStream(newStream);
+          renegotiationNeeded = true;
+
+        }
+      };
+    }
+  }
+}
+
+function handleRenegotiation() {
+  if (!renegotiationNeeded) {
+    return;
+  }
+  // TODO The onnegotiationneeded callback seems to be called multiple times in Chrome, but only once (per addStream call?) in FF.
+  // Not sure if this is a Chrome bug, or just stems from not fully understanding when this event is fired, but this results in multiple offer SDPs
+  // and multiple answer SDPs being received, causing "harmless" error messages in the console. Screen sharing still seems to work though.
+  console.debug("handleRenegotiation() called!");
+  // Go through the list of participants and send each one a new SDP.
+  for (var pid in participantList) {
+    if (pid != "localVideo") {
+      if (pc.signalingState=="stable") {
+        var pc = participantList[pid].peerConnection;
+        pc.createOffer().then(function(offer) {
+          return pc.setLocalDescription(offer);
+        }).then(function() {
+          // Send this new offer to this participant.
+          sendSDP(pc.localDescription, pid);
+        }).catch(errorHandler);
+      }
+    }
+  }
+}
+
+function mirrorMe () {
+  var participant = new Object();
+  participant.pid = 'mirrorReceiver'
+  participant.turn = iceServerManager.getFastestTurnServers()
+  callParticipant(participant)
 }
 
 function initSocket() {
   socket = io('https://' + document.domain + ':' + document.location.port);
-  socket.on('connection',function(socket){
+  socket.on('connect', () => {
     console.log('Socket connected!');
+    userPid = socket.id;
   });
   socket.on('restTURN',function(msg){
-    if ( msg.restTURN != null ) { 
+    if ( msg.restTURN != null ) {
       console.log('received restTURN from server :)');
-      restTURN = msg.restTURN;
-      peerConnectionConfig.iceServers.push(msg.restTURN);
+      var restTURN = msg.restTURN;
+      var testIceServers = []
+      for (var j in restTURN.urls) {
+        switch (adapter.browserDetails.browser) {
+        case 'chrome':
+            console.log(restTURN.urls[j].match("^(turns).*$"));
+            if ( restTURN.urls[j].match("^(turns).*$") ) {
+                       console.log("-= Ignore turns. Chrome workaround =-");
+                       continue;
+            }
+            break;
+        case 'firefox':
+            if (restTURN.urls[j].match("^turn[s]?:[\[](.*)$")) {
+                       console.log("-= Ignore IPv6 TURN Firefox workaround =-");
+                       continue;
+            }
+            if ( restTURN.urls[j].match("^(turns).*$") ) {
+                       console.log("-= Ignore turns. Firefox workaround =-");
+                       continue;
+            }
+            if ( restTURN.urls[j].match("^.*transport=tcp$") ) {
+                       console.log("-= Ignore TCP. Firefox workaround =-");
+                       continue;
+            }
+             break;
+        }
+        var turnServer = {};
+        turnServer.username = restTURN.username;
+        turnServer.credential = restTURN.credential;
+        turnServer.urls = restTURN.urls[j]
+        testIceServers.push(turnServer);
+        console.log(turnServer.urls);
+      }
+      setGlobalMessage('Testing network conditions')
+      iceServerManager.startTesting(testIceServers,function(){
+        setGlobalMessage('Getting access to your camera and microphone...')
+        getCam()
+      },progressBarManager.updateProgress.bind(progressBarManager));
     }
     else {
       console.log('received empty restTURN config from server :(');
     }
-    // inform the server that this client is ready to stream:
-    socket.emit('ready',room);
   });
   socket.on('sdp',function(msg){
-    // Only create answers in response to offers
-    console.log('received sdp from',msg.pid,msg.restTURN);
-    if(msg.sdp.type == 'offer') {
-      if ( typeof msg.restTURN != 'undefined' ) peerConnectionConfig.iceServers.push(msg.restTURN);
-      participantList[msg.pid]={};
-      participantList[msg.pid].peerConnection = new RTCPeerConnection(peerConnectionConfig)
-      participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-      participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
-      participantList[msg.pid].peerConnection.addStream(localStream)
-      participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-      participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
-    }
-    else if (msg.sdp.type == 'answer') {
-      participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-    }
+    console.log('received sdp from', msg.pid, msg.turn, msg.sdp);
+    receivedDescription(msg)
+    sendName();
   });
   socket.on('iceCandidate',function(msg){
-    console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
+    // console.log('got iceCandidate from %s: %s',msg.pid, msg.candidate.candidate );
     participantList[msg.pid].peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(errorHandler);
   });
   socket.on('participantReady',function(msg){
     console.log('got participantReady:',msg );
     callParticipant(msg);
+    $('#chatAudio')[0].play();
   });
   socket.on('bye',function(msg){
     console.log('got bye from:',msg.pid );
@@ -94,29 +526,109 @@ function initSocket() {
     console.log('received participantDied from server: removing participant from my participantList');
     deleteParticipant(msg.pid);
   });
-
+  socket.on('magnetURI',function(msg){
+    participantList[msg.pid].progressBar._container.classList.remove('hidden')
+    participantList[msg.pid].progressBar.set(0)
+    webtorrentClient.add(msg.magnetURI,function(torrent) {
+      torrent.on('done', function () {
+        participantList[msg.pid].progressBar._container.classList.add('hidden')
+        console.log('torrent download finished from ',msg.pid,' ',torrent.files[0].name)
+        torrent.files[0].getBlobURL(function callback (err, url) {
+          if (err) console.log('Error on getting torrent-file: ',torrent.files[0].name)
+          var a = document.createElement('a')
+          a.download = torrent.files[0].name
+          a.href = url
+          a.textContent = 'Download ' + torrent.files[0].name
+          document.body.appendChild(a)
+        }.bind(msg))
+      }.bind(msg))
+      torrent.on('download',function (bytes) {
+        participantList[msg.pid].progressBar.set(torrent.progress)
+        console.log('torrent progress: ',torrent.progress,torrent.files[0].name,msg.pid)
+      }.bind(msg))
+    }.bind(msg))
+  });
+  socket.on('chat', function(msg) {
+    console.log('received chat from ', msg.pid, msg.chat);
+    appendChat(msg.chat);
+  });
+  socket.on('name', function(msg) {
+    console.log('received name from ', msg.pid, msg.name);
+    receiveName(msg);
+  });
   window.onunload = function(){socket.emit('bye')};
 }
 
-function callParticipant(msg) {
-    participantList[msg.pid] = {};
-    tempPeerConnectionConfig = peerConnectionConfig;
-    if ( typeof(msg.restTURN) != 'undefined') {
-      participantList[msg.pid].restTURN=msg.restTURN; 
-      tempPeerConnectionConfig.iceServers.push(participantList[msg.pid].restTURN);
+function createPeerConnection(pid,turn) {
+    console.log("Creating PeerConnection for pid: " + pid);
+    var peerConnectionConfig = {}
+    peerConnectionConfig.iceServers = iceServerManager.getFastestIceServers()
+
+    /*
+    if ( typeof(msg.turn) != 'undefined') {
+      participantList[pid].turn=turn;
+      peerConnectionConfig.iceServers =
+        participantList[pid].turn.concat(peerConnectionConfig.iceServers)
     }
-    participantList[msg.pid].peerConnection = new RTCPeerConnection(tempPeerConnectionConfig);
-    participantList[msg.pid].peerConnection.onicecandidate = function (event){gotIceCandidate(event.candidate,msg.pid)};
-    participantList[msg.pid].peerConnection.onaddstream = function (event){addStream(event.stream,msg.pid)};
+    */
+
+    if ( pid.indexOf('mirror') != -1 ) {
+      peerConnectionConfig.iceTransportPolicy = 'relay'
+    }
+
+    var pc = new RTCPeerConnection(peerConnectionConfig);
+    pc.onicecandidate = function (event){gotIceCandidate(event.candidate,pid)};
+    pc.ontrack = function (event){addStream(event.streams[0],pid);};
+    pc.onnegotiationneeded = handleRenegotiation;
+    return pc;
+}
+
+function callParticipant(msg) {
+    console.log("callParticipant with pid: " + msg.pid);
+    participantList[msg.pid] = {};
+    participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
     participantList[msg.pid].peerConnection.addStream(localStream);
-    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid)}).catch(errorHandler);
+    // Create offer for target pid and then send through signalling.
+    participantList[msg.pid].peerConnection.createOffer().then(function (description){createdDescription(description,msg.pid,true)}).catch(errorHandler);
+}
+
+function receivedDescription(msg){
+  if(msg.sdp.type == 'offer') {
+    console.log("OFFER SDP received from pid: " + msg.pid);
+    // Create a PeerConnection object only if we don't already have one for this pid.
+    if (participantList[msg.pid] == undefined) {
+      participantList[msg.pid]={};
+      participantList[msg.pid].peerConnection = createPeerConnection(msg.pid, msg.turn);
+      if ( msg.pid.indexOf('mirrorSender') == -1 ){ // sending mirror stream only sender -> receiver
+        participantList[msg.pid].peerConnection.ontrack = function (event){addStream(event.streams[0],msg.pid);};
+        participantList[msg.pid].peerConnection.addStream(localStream)
+      } else {
+        // TODO: this is a ugly hack and should be handled somewhere else:
+        participantList[msg.pid].peerConnection.ontrack = function (event){
+          replaceStream(event.streams[0],'localVideo')
+          document.getElementById("joinButton").classList.remove('hidden')
+        }
+      }
+    }
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+    participantList[msg.pid].peerConnection.createAnswer().then(function (description){createdDescription(description,msg.pid,false)}).catch(errorHandler);
+    if (chatMessages.length === 0) {
+      socket.emit('requestchat', {'pid' : msg.pid});
+    }
+  }
+  else if (msg.sdp.type == 'answer') {
+    console.log("Received ANSWER SDP from pid: " + msg.pid);
+    participantList[msg.pid].peerConnection.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(errorHandler);
+  }
 }
 
 function deleteParticipant(pid){
   if (typeof(participantList[pid]) != 'undefined'){
     console.log('removing participant: ',pid)
     participantList[pid].peerConnection.close();
-    participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
+    if ( typeof participantList[pid].videoDiv == 'object' ) {
+      participantList[pid].videoDiv.parentNode.removeChild(participantList[pid].videoDiv);
+    }
     delete participantList[pid];
   }
   else{
@@ -125,53 +637,130 @@ function deleteParticipant(pid){
 }
 
 function gotIceCandidate(candidate, pid) {
-    if(candidate != null) {
-        console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
-        socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
+  if(candidate != null) {
+    // console.log('send gathered iceCandidate:%s to %s',candidate.candidate, pid);
+    if ( pid.indexOf('mirror') == -1 ){ // send all candidates that are not mirror
+      socket.emit('iceCandidate',{'candidate':candidate,'pid':pid});
     }
+    else { // candidates from mirroring set we directly ( but only relay candidates )
+      if ( candidate.candidate.split("typ")[1].split(" ",2 )[1] == 'relay' )  {
+        if (pid == 'mirrorReceiver') { pid = 'mirrorSender' }
+        else { pid = 'mirrorReceiver' }
+        participantList[pid].peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(errorHandler);
+      }
+    }
+  }
 }
 
-function createdDescription(description,pid) {
-    console.log('created localDescription sending to', pid);
-    var msg = {};
-    if ( description.type == 'offer' && typeof restTURN != 'undefined' ) 
-      msg.restTURN = restTURN; // sending my own restTURN along 
-    participantList[pid].peerConnection.setLocalDescription(description).then(function() {
-	msg.sdp = participantList[pid].peerConnection.localDescription;
-	msg.pid = pid;
-        socket.emit('sdp',msg);
-    }).catch(errorHandler);
-    console.log('sending message:',msg);
+function createdDescription(description,pid,isOffer) {
+  console.log('Setting local ' + (isOffer ? 'OFFER' : 'ANSWER') + ' SDP and sending to ' + pid);
+  participantList[pid].peerConnection.setLocalDescription(description).then(function() {
+    sendSDP(participantList[pid].peerConnection.localDescription, pid);
+  }).catch(errorHandler)
 }
 
-function addStream( stream, pid ) {
-  videoDiv = document.getElementById("templateVideoDiv").cloneNode(true);
-  participantList[pid].mediaStream = stream;
-  var video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  if ( pid == "localStream" ) {
-    video.muted = true;
-    videoDiv.style.height = "100%";
+function sendSDP(sdp, pid) {
+  console.log('Sending SDP to', pid);
+  var msg = {};
+  if ( sdp.type == 'offer' ){
+    msg.turn = iceServerManager.getFastestTurnServers() // sending my own TURN servers along
+  }
+  msg.sdp = sdp
+  msg.pid = pid
+  // mirroring description are not sent via signalling server but managed locally:
+  if ( pid.indexOf('mirror') == -1 ){
+    socket.emit('sdp',msg)
+    console.log('sending message:',msg)
   } else {
-  videoDiv.style.opacity = "0"; // invisible until layout is settled
+     // changing sender <> receiver ( this is what the signalling server would doing otherwise ):
+    if (pid == 'mirrorReceiver') { msg.pid = 'mirrorSender' }
+    else { msg.pid = 'mirrorReceiver' }
+    receivedDescription(msg)
   }
-  videoDiv.appendChild(video);
-  lastVideoDiv = videoContainer.lastElementChild;
-  videoContainer.appendChild(videoDiv);
-  videoDiv.addEventListener("drop",drop);
-  videoDiv.addEventListener("dragstart",dragStart);
-  videoDiv.addEventListener("dragover",allowDrop);
-  videoDiv.addEventListener("dragend", dragEnd);
-  videoDiv.addEventListener("dragleave", dragLeave);
-  videoDiv.addEventListener("dragenter", dragEnter);
-  videoDiv.draggable="true";
-  videoDiv.id = pid;
-  participantList[pid].videoDiv = videoDiv;
-  if ( lastVideoDiv ) {
-    videoDiv.style.height =  lastVideoDiv.style.height;
+}
+
+// this is about creating a video view for participant and
+// adding and activating video
+function addStream( stream, pid ) {
+  console.debug("*** addStream() called for pid: " + pid);
+  var videoDiv = document.getElementById(pid);
+  if (videoDiv) {
+    // Video element already exists for this pid, so just replace the source with the given stream.
+    replaceStream(stream, pid)
+  } else {
+      var videoDiv = {}
+      participantList[pid].mediaStream = stream;
+      var video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      if ( pid == "localVideo" ) {
+        video.muted = true;
+        videoDiv = document.getElementById("localVideoDiv").cloneNode(true)
+        videoDiv.style.height = "100%";
+        video.style.cssText = "-moz-transform: scale(-1, 1); \
+          -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+          transform: scale(-1, 1); filter: FlipH;";
+      } else {
+        videoDiv = document.getElementById("templateVideoDiv").cloneNode(true)
+        videoDiv.style.opacity = "0"; // invisible until layout is settled
+      }
+      videoDiv.appendChild(video);
+      var progressBarDiv = document.createElement('div')
+      progressBarDiv.classList.add('overlayBottom','hidden')
+      var progressBar = new ProgressBar.Line(progressBarDiv, {
+        strokeWidth: 5,
+        easing: 'easeInOut',
+        duration: 100,
+        color: '#FFEA82',
+        trailColor: '#eee',
+        trailWidth: 1,
+        svgStyle: {width: '85%'},
+        text: {
+          style: {
+            // Text color.
+            // Default: same as stroke color (options.color)
+            color: '#fff',
+            position: 'absolute',
+            // display:'block',
+            right: '0px',
+            // bottom: '0px',
+            width:'15%',
+            padding: '2px',
+            margin: '2px',
+            top: '50%',
+            transform: 'translate(0,-50%)',
+          },
+          autoStyleContainer: false
+        },
+        from: {color: '#FFEA82'},
+        to: {color: '#ED6A5A'},
+        step: (state, bar) => {
+          bar.setText(Math.round(bar.value() * 100) + ' %')
+        }
+      })
+      participantList[pid].progressBar = progressBar
+      videoDiv.appendChild(progressBarDiv)
+      var lastVideoDiv = videoContainer.lastElementChild;
+      videoContainer.appendChild(videoDiv);
+      videoDiv.addEventListener("drop",drop);
+      videoDiv.addEventListener("dragstart",dragStart);
+      videoDiv.addEventListener("dragover",allowDrop);
+      videoDiv.addEventListener("dragend", dragEnd);
+      videoDiv.addEventListener("dragleave", dragLeave);
+      videoDiv.addEventListener("dragenter", dragEnter);
+      videoDiv.draggable="true";
+      videoDiv.id = pid;
+      participantList[pid].videoDiv = videoDiv;
+      if ( lastVideoDiv ) {
+        videoDiv.style.height =  lastVideoDiv.style.height;
+      }
+      videoDiv.classList.remove('hidden');
+      fadeOutTimer = window.setTimeout(fadeOutElements, [4000],pid);
   }
-  videoDiv.classList.remove('hidden');
+}
+
+function replaceStream( stream, pid ) {
+  document.getElementById(pid).getElementsByTagName('video')[0].srcObject = stream;
 }
 
 function forceRedraw (element){
@@ -181,33 +770,65 @@ function forceRedraw (element){
   element.style.display = disp;
 };
 
+function muteLocalAudio() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('audioMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('audioUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getAudioTracks()[0].enabled = false;
+  muteIcon.classList.remove('hidden');
+  unMuteIcon.classList.add('hidden');
+}
+
+function unMuteLocalAudio() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('audioMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('audioUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getAudioTracks()[0].enabled = true;
+  muteIcon.classList.add('hidden');
+  unMuteIcon.classList.remove('hidden');
+}
+
+function muteLocalVideo() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('videoMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('videoUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getVideoTracks()[0].enabled = false;
+  muteIcon.classList.remove('hidden');
+  unMuteIcon.classList.add('hidden');
+}
+
+function unMuteLocalVideo() {
+  var muteIcon = document.getElementById('global-controls').getElementsByClassName('videoMuteIcon')[0];
+  var unMuteIcon = document.getElementById('global-controls').getElementsByClassName('videoUnMuteIcon')[0];
+  participantList['localVideo'].mediaStream.getVideoTracks()[0].enabled = true;
+  muteIcon.classList.add('hidden');
+  unMuteIcon.classList.remove('hidden');
+}
+
 function muteAudio(pid){
-  muteIcon = document.getElementById(pid).getElementsByClassName('audioMuteIcon')[0];
-  unMuteIcon = document.getElementById(pid).getElementsByClassName('audioUnMuteIcon')[0];
+  var muteIcon = document.getElementById(pid).getElementsByClassName('audioMuteIcon')[0];
+  var unMuteIcon = document.getElementById(pid).getElementsByClassName('audioUnMuteIcon')[0];
   participantList[pid].mediaStream.getAudioTracks()[0].enabled = false;
   muteIcon.classList.remove('hidden');
   unMuteIcon.classList.add('hidden');
 }
 
 function unMuteAudio(pid){
-  muteIcon = document.getElementById(pid).getElementsByClassName('audioMuteIcon')[0];
-  unMuteIcon = document.getElementById(pid).getElementsByClassName('audioUnMuteIcon')[0];
+  var muteIcon = document.getElementById(pid).getElementsByClassName('audioMuteIcon')[0];
+  var unMuteIcon = document.getElementById(pid).getElementsByClassName('audioUnMuteIcon')[0];
   participantList[pid].mediaStream.getAudioTracks()[0].enabled = true;
   muteIcon.classList.add('hidden');
   unMuteIcon.classList.remove('hidden');
 }
 
 function unMuteVideo(pid){
-  muteIcon = document.getElementById(pid).getElementsByClassName('videoMuteIcon')[0];
-  unMuteIcon = document.getElementById(pid).getElementsByClassName('videoUnMuteIcon')[0];
+  var muteIcon = document.getElementById(pid).getElementsByClassName('videoMuteIcon')[0];
+  var unMuteIcon = document.getElementById(pid).getElementsByClassName('videoUnMuteIcon')[0];
   participantList[pid].mediaStream.getVideoTracks()[0].enabled = true;
   muteIcon.classList.add('hidden');
   unMuteIcon.classList.remove('hidden');
 }
 
 function muteVideo(pid){
-  muteIcon = document.getElementById(pid).getElementsByClassName('videoMuteIcon')[0];
-  unMuteIcon = document.getElementById(pid).getElementsByClassName('videoUnMuteIcon')[0];
+  var muteIcon = document.getElementById(pid).getElementsByClassName('videoMuteIcon')[0];
+  var unMuteIcon = document.getElementById(pid).getElementsByClassName('videoUnMuteIcon')[0];
   participantList[pid].mediaStream.getVideoTracks()[0].enabled = false;
   muteIcon.classList.remove('hidden');
   unMuteIcon.classList.add('hidden');
@@ -220,10 +841,13 @@ function setBigVideo(pid){
   var video = document.createElement('video');
   video.srcObject = participantList[pid].mediaStream;
   video.autoplay = true;
-  if ( pid == "localStream" ) {
+  if ( pid == "localVideo" ) {
     video.muted = true;
+    video.style.cssText = "-moz-transform: scale(-1, 1); \
+      -webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+      transform: scale(-1, 1); filter: FlipH;";
   }
-  videoContainer.style.top = "80%";
+  videoContainer.style.top = "90%";
   bigVideoContainer.appendChild(video);
   var exitBigVideoIcon = document.getElementById('bigVideoContainer').getElementsByClassName('exitBigVideoIcon')[0];
   exitBigVideoIcon.classList.remove('hidden');
@@ -269,31 +893,48 @@ function toggleFullScreen() {
   }
 }
 
+function showSettings() {
+  document.getElementById('settingsWrapper').classList.remove('hidden');
+}
+
+function saveSettings() {
+  document.getElementById('settingsWrapper').classList.add('hidden');
+}
+
+function toggleScreenshare() {
+  if (!screensharing) {
+    // Currently using the camera, so switch to the screen.
+    getScreen();
+  } else {
+    // Currently sharing the screen, so switch to camera.
+    getCam();
+  }
+}
+
 function unHideOpaqueElements(container){
-  children = container.children
-  for(i=0;i < children.length ;i++){
+  var children = container.children
+  for(var i=0;i < children.length ;i++){
     if ( children[i].style.opacity == '0'  ) { children[i].style.opacity = '1' }
   }
- 
 }
 
 // checks if the last videoDiv fits on the screen
 // checks if there is to much space between bottom of last videoDiv and bottom of screen
 // and scale videoDiv height up or down
 function checkVideoContainer(){
-  last = videoContainer.lastElementChild;
+  var last = videoContainer.lastElementChild;
   if ( last == null ) {
     window.setTimeout(checkVideoContainer, 1000 );
     return;
   }
-  height = last.style.height.split("%")[0] / 100; // 1 = 100%
+  var height = last.style.height.split("%")[0] / 100; // 1 = 100%
   // only if last element's video is connected otherwise wait
   if ( ( last.getElementsByTagName("video")[0].networkState == 2 ||
          last.getElementsByTagName("video")[0].networkState == 1 ) ) {
     // if last element is out of window:
+    var videoDivList = videoContainer.getElementsByClassName("videoDiv")
     if ( last.getBoundingClientRect().bottom > window.innerHeight ) {
-      videoDivList = videoContainer.getElementsByClassName("videoDiv")
-      for(i=0;i<videoDivList.length;i++){
+      for(var i=0;i<videoDivList.length;i++){
         videoDivList[i].style.height =
           ( 100 / ( ( 1 / height ) + 0.1 ) ) + "%"
       }
@@ -304,7 +945,6 @@ function checkVideoContainer(){
                     ( window.innerHeight * 0.1 ) ) &&
                   ( ( videoContainer.firstElementChild.getBoundingClientRect().left ) >
                     ( window.innerWidth * 0.012 ) ) ) {
-        videoDivList = videoContainer.getElementsByClassName("videoDiv")
         for(i=0;i<videoDivList.length;i++){
           videoDivList[i].style.height = height * 100 +
             ( ( videoContainer.firstElementChild.getBoundingClientRect().left -
@@ -316,8 +956,8 @@ function checkVideoContainer(){
     } else {
         // check if videoContainer was modified before so it should be finished
         // now - so we can redraw it ( because chrome live rendering is not perfect )
-        if ( videoContainerChanged == true ) { 
-          forceRedraw(videoContainer) 
+        if ( videoContainerChanged == true ) {
+          forceRedraw(videoContainer)
         }
         unHideOpaqueElements(videoContainer)
         window.setTimeout(checkVideoContainer, 200 ); // standard recheck timeframe
@@ -337,8 +977,8 @@ function dragLeave( ev ) {
 function dragEnter( ev ) {
   if ( this.id == dragLastOver ) {return};
   console.log("dragEnter",this.id, ev.dataTransfer.getData("text") )
-  videoList = videoContainer.getElementsByTagName("video")
-  for(i=0;i<videoList.length;i++)
+  var videoList = videoContainer.getElementsByTagName("video")
+  for(var i=0;i<videoList.length;i++)
     { videoList[i].style.padding = "1px" }
   dragLastOver = this.id;
 }
@@ -346,8 +986,8 @@ function dragEnter( ev ) {
 function dragEnd ( ev ) {
     // reset the transparency and padding of drag source and size of videoContainer
     ev.target.style.opacity = "";
-    videoList = videoContainer.getElementsByTagName("video")
-    for(i=0;i<videoList.length;i++)
+    var videoList = videoContainer.getElementsByTagName("video")
+    for(var i=0;i<videoList.length;i++)
           { videoList[i].style.padding = "1px" }
 }
 
@@ -357,8 +997,8 @@ function allowDrop(ev) {
     var element = document.getElementById(this.id);
     var elementVideo = element.getElementsByTagName("video")[0]
 
-    destElement = document.getElementById(this.id);
-    destElementVideo = destElement.getElementsByTagName("video")[0]
+    var destElement = document.getElementById(this.id);
+    var destElementVideo = destElement.getElementsByTagName("video")[0]
 
     if ( ev.offsetX > destElementVideo.offsetWidth / 2 ) {
       if ( destElement.nextSibling == null ){ // insert at end
@@ -386,8 +1026,8 @@ function drop(ev) {
     ev.preventDefault();
     if ( this.id == dragSource ) {return};
     var data = ev.dataTransfer.getData("text");
-    destElement = document.getElementById(this.id);
-    destElementVideo = destElement.getElementsByTagName("video")[0];
+    var destElement = document.getElementById(this.id);
+    var destElementVideo = destElement.getElementsByTagName("video")[0];
 
     if ( ev.offsetX > destElementVideo.offsetWidth / 2 ) {
       if ( destElement.nextSibling == null ){ // insert at end
@@ -396,11 +1036,12 @@ function drop(ev) {
         videoContainer.insertBefore(document.getElementById( data ), destElement.nextSibling);
       }
     } else { // insert here
-      videoContainer.insertBefore(document.getElementById(data), element);
+      videoContainer.insertBefore(document.getElementById(data), destElement);
     }
     document.getElementById(data).getElementsByTagName("video")[0].play();
     document.getElementById(data).style.opacity = "1";
 }
+
 function fadeOutElements(pid) {
   $(document.getElementById(pid).getElementsByClassName('fadeOutElements')).fadeOut();
   participantList[pid].hidingElementsStatus = "hidden"
@@ -413,7 +1054,7 @@ function fadeInElements(pid) {
 }
 
 function onMouseMoveAction(pid) {
-  console.log(pid);
+  // console.log(pid);
   if ( participantList[pid].hidingElementsStatus === "hidden" ) {
     fadeInElements(pid);
   }
@@ -426,8 +1067,386 @@ function toggleStickyness(pid) {
   $("#stickyButton").toggleClass("black");
 }
 
-
-
 function errorHandler(error) {
-    console.log(error);
+    console.error(error);
+}
+
+function joinRoom(){
+  socket.emit('ready',{'room':room,'turn':iceServerManager.getFastestTurnServers()})
+  document.getElementById('joinButton').classList.add('hidden')
+  document.getElementById('localMessage').classList.add('hidden')
+  document.getElementById('localTopLeft').insertBefore(document.getElementById('audioIndicator'),document.getElementById('localTopLeft').childNodes[0])
+  replaceStream(localStream,'localVideo')
+  deleteParticipant('mirrorReceiver')
+  deleteParticipant('mirrorSender')
+}
+
+var progressBarManager = {
+  progressBar:null,
+  init:function(){
+    this.progressBar = new ProgressBar.Circle(globalMessageProgressBar, {
+      color: '#aaa',
+      // This has to be the same size as the maximum width to
+      // prevent clipping
+      strokeWidth: 4,
+      trailWidth: 1,
+      easing: 'easeInOut',
+      from: { color: '#aaa', width: 1 },
+      to: { color: '#333', width: 4 },
+      duration:200,
+      step: function(state, circle) {
+        circle.path.setAttribute('stroke', state.color);
+        circle.path.setAttribute('stroke-width', state.width);
+        var value = Math.round(circle.value() * 100);
+        if (value === 0) {
+          circle.setText('');
+        } else {
+          circle.setText(value+'%');
+        }
+      }
+    })
+  },
+  updateProgress:function(progress){
+    document.getElementById('globalMessage').classList.remove('hidden')
+    this.progressBar.animate(progress)
+    if ( progress > 0.99999999 ) {
+      fadeOut(document.getElementById('globalMessage'))
+    }
+  },
+}
+
+function setGlobalMessage(msg){
+//  document.getElementById('globalMessage').classList.remove('hidden')
+  document.getElementById('globalMessageTextField').innerHTML = msg
+}
+
+function fadeOut(element){
+  var op = 1;  // initial opacity
+  var timer = setInterval(function () {
+    if (op <= 0.1){
+      clearInterval(timer);
+      element.classList.add('hidden');
+    }
+    element.style.opacity = op;
+//    element.style.filter = 'alpha(opacity=' + op * 100 + ")";
+    op -= op * 0.1;
+  }, 70);
+}
+
+function audioAnalyser(stream) {
+  var audioContext = new AudioContext()
+  var analyser = audioContext.createAnalyser()
+  var microphone = audioContext.createMediaStreamSource(stream)
+  var javascriptNode = audioContext.createScriptProcessor(2048, 1, 1)
+
+  analyser.smoothingTimeConstant = 0
+  analyser.fftSize = 1024
+
+  microphone.connect(analyser)
+  analyser.connect(javascriptNode)
+  javascriptNode.connect(audioContext.destination)
+  var maxAudioLvl = 0
+  var oldAudioLvl = 0
+  var speakerDetected = false
+
+  javascriptNode.onaudioprocess = function() {
+    var array = new Uint8Array(analyser.frequencyBinCount)
+    analyser.getByteFrequencyData(array)
+    var values = 0
+    var length = array.length;
+    for (var i = 0; i < length; i++) {
+      values += (array[i]*array[i]);
+    }
+
+    var average = Math.sqrt(values / length);
+    maxAudioLvl = Math.max(maxAudioLvl,average);
+    average = Math.max( average, oldAudioLvl-oldAudioLvl*0.1);
+    oldAudioLvl = average;
+    var averagePercent = average / maxAudioLvl
+    var audioIndicator = document.getElementById('audioIndicator')
+    audioIndicator.style.opacity = averagePercent
+    if ( averagePercent > 0.25 ) {
+      if ( averagePercent > 0.8 ) {
+        audioIndicator.style.color = 'red'
+      }
+      else {
+        audioIndicator.style.color = 'yellow'
+        speakerDetected = true
+      }
+    }
+    else {
+      audioIndicator.style.color = null
+      speakerDetected = false
+    }
+  }
+}
+
+function getScreen(){
+  var constraints = {
+    audio: true,
+    video: { mediaSource: 'screen'}
+  };
+
+  if(adapter.browserDetails.browser === 'chrome') {
+    // Chrome 34+ requires an extension
+    var pending = window.setTimeout(function () {
+      alert('The required Chrome extension is not installed. To install it, go to https://chrome.google.com/webstore/detail/janus-webrtc-screensharin/hapfgfdkleiggjjpfpenajgdnfckjpaj (you might have to reload the page afterwards).');
+    }, 1000);
+    window.postMessage({ type: 'janusGetScreen', id: pending }, '*');
+  } else {
+    if(navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia(constraints).then(getScreenSuccess).catch(errorHandler);
+    } else {
+      alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+    }
+  }
+}
+
+function getCam(){
+  var constraints = {
+    audio: true,
+    video: {
+        "width": {"min": "50","ideal":"1280",  "max": "1920"},
+        "height": {"min": "50","ideal":"768",  "max": "1050"}
+      }
+  };
+
+  // get camera and mic:
+  if(navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia(constraints).then(getCamSuccess).catch(errorHandler);
+  } else {
+      alert('Your browser does not support getUserMedia API: sorry you can\'t use this service');
+  }
+}
+
+function pageReady() {
+  // JQuery GUI stuff
+  $('#chat header').on('click', function() {
+    if (chatHidden) { // Clicked on hidden chat
+      $('.chat').slideToggle(300, 'swing');
+      $('.chat-message-counter').fadeOut(300, 'swing');
+      chatHidden = false;
+      unreadMessages = 0;
+      notificationHidden = true;
+    } else { // Clicked on open chat
+      $('.chat').slideToggle(300, 'swing');
+      // $('.chat-message-counter').fadeToggle(300, 'swing');
+
+      chatHidden = true;
+      unreadMessages = 0;
+      notificationHidden = true;
+    }
+  });
+
+  $('.chat').slideToggle(0);
+  // $('.chat-message-counter').fadeToggle(0, 'swing');;
+
+  // appending HTML5 Audio Tag in HTML Body
+  $('<audio id="chatAudio"><source src="css/notify.mp3" type="audio/mpeg"></audio>').appendTo('body');
+
+  // Editable name tag
+  $(document).on("click", "#nametag", function() {
+    var original_text = $(this).text();
+    document.getElementById('localTopCenter').classList.remove('fadeOutElements')
+    var new_input = $("<input class=\"nameeditor\"/>");
+    if (original_text != "Enter name...") {
+      new_input.val(original_text);
+    }
+    $(this).replaceWith(new_input);
+    new_input.focus();
+    new_input.keypress( function(e) {
+      let key = e.keyCode
+      if (key == 13) {
+        $(this).blur()
+        return false;
+      }
+    });
+  });
+
+  $(document).on("blur", ".nameeditor", function() {
+    var new_input = $(this).val();
+    document.getElementById('localTopCenter').classList.add('fadeOutElements')
+    var updated_text = $("<span id=\"nametag\">");
+    if (new_input.trim() == "") {
+      userName = "";
+      updated_text.text("Enter name...");
+    } else {
+      userName = new_input;
+      updated_text.text(new_input);
+    }
+    sendName();
+    $(this).replaceWith(updated_text);
+  });
+
+  // End JQuery GUI stuff
+
+  // getting some HTML-elements we need later and roomname:
+  room = document.URL.split("/")[3];
+  localVideo = document.getElementById('localVideo');
+  videoContainer = document.getElementById('videoContainer');
+  bigVideoContainer = document.getElementById('bigVideoContainer');
+  webtorrentClient = new WebTorrent({
+    tracker: {
+      rtcConfig: peerConnectionConfig
+    }
+  })
+  dragDrop = new DragDrop('#videoDivWrapper', function (files, pos) {
+    console.log('Here are the dropped files', files)
+    console.log('Dropped at coordinates', pos.x, pos.y)
+    webtorrentClient.seed(files, function (torrent) {
+      console.log('Client is seeding ' + torrent.magnetURI)
+      socket.emit('magnetURI',torrent.magnetURI)
+    })
+  })
+
+
+  progressBarManager.init()
+
+  // move initially configured ICE servers to testing before we use them
+  setGlobalMessage('Testing connection step 1')
+  if ( typeof(peerConnectionConfig.iceServers) != 'undefined' && peerConnectionConfig.iceServers.length > 0 ) {
+    iceServerManager.startTesting(peerConnectionConfig.iceServers,undefined,
+          progressBarManager.updateProgress.bind(progressBarManager))
+  }
+  setGlobalMessage('Initializing...')
+  initSocket()
+
+  window.addEventListener('resize', redrawVideoContainer);
+  window.setTimeout(checkVideoContainer, 2500);
+}
+
+
+if (adapter.browserDetails.browser === 'chrome') {
+  // Listen for events from the Chrome extension used for screensharing.
+  // Code from Janus project (Copyright (c) 2016 Meetecho)
+  window.addEventListener('message', function (event) {
+    if(event.origin != window.location.origin)
+      return;
+    if (event.data.type == 'janusGotScreen') {
+      if (event.data.sourceId === '') {
+        // user canceled
+        console.log('You cancelled the request for permission, giving up...');
+      } else {
+        var constraints = {
+          audio: false,             // Chrome currently does not support retrieving the one with the screen
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              maxWidth: window.screen.width,
+              maxHeight: window.screen.height,
+              maxFrameRate: 3
+            },
+            optional: [
+              {googTemporalLayeredScreencast: true}
+            ]
+          }
+        };
+
+        constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
+        // console.log("janusGotScreen: constraints=" + JSON.stringify(constraints));
+        navigator.mediaDevices.getUserMedia(constraints).then(getChromeScreenSuccess).catch(errorHandler);
+      }
+    } else if (event.data.type == 'janusGetScreenPending') {
+        window.clearTimeout(event.data.id);
+    }
+  });
+}
+
+/* Chat */
+
+// Chat message submitted
+function chatMessage() {
+  var form = document.getElementById('chat-form');
+  var messageText = form.elements['message'].value;
+
+  // Empty name for now
+  var msg = {pid: userPid, name : userName, time : Date.now(), message : messageText};
+
+  chatMessages.push(msg);
+
+  sendChat(msg);
+  appendChat(msg);
+
+  form.reset();
+
+  return false; // Return false to disable normal form submition
+}
+
+/*
+
+msg = {"name" : "displayname", "time" : "timestamp", "message" : "messagetext"}
+
+<div class="chat-message clearfix">
+  <div class="chat-message-content clearfix">
+    <span class="chat-time">13:35</span>
+    <h5>John Doe</h5>
+    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Error,
+      explicabo quasi ratione odio dolorum harum.</p>
+  </div> <!-- end chat-message-content -->
+</div> <!-- end chat-message -->
+<hr>
+
+*/
+
+// Chat appended to history
+function appendChat(msg) {
+  var chatHistory = document.getElementById('chat-history');
+
+  var chatText = document.createElement('p');
+  chatText.appendChild(document.createTextNode(msg.message));
+
+  var chatName = document.createElement('h5');
+  chatName.appendChild(document.createTextNode(msg.name));
+
+  var time = new Date(msg.time);
+  var chatTime = document.createElement('span');
+  chatTime.className = 'chat-time';
+  chatTime.appendChild(document.createTextNode((time.getHours() < 10 ? '0' : '') + time.getHours() + ':' + (time.getMinutes() < 10 ? '0' : '') + time.getMinutes()));
+
+  var chatMessageContent = document.createElement('div');
+  chatMessageContent.className = 'chat-message-content clearfix';
+  chatMessageContent.appendChild(chatTime);
+  chatMessageContent.appendChild(chatName);
+  chatMessageContent.appendChild(chatText);
+
+  var chatMessage = document.createElement('div');
+  chatMessage.className = 'chat-message clearfix';
+  chatMessage.appendChild(chatMessageContent);
+
+  chatHistory.appendChild(chatMessage);
+  chatHistory.appendChild(document.createElement('hr'));
+
+  chatHistory.scrollTop = chatHistory.scrollHeight - chatHistory.clientHeight;
+
+  if (chatHidden) { // Update unread count and show notification if hidden
+    unreadMessages++;
+    var unreadCounter = document.getElementById('chat-message-counter');
+    unreadCounter.innerHTML = unreadMessages;
+
+    if (notificationHidden) {
+      $('#chatAudio')[0].play();
+      $('.chat-message-counter').fadeIn(300, 'swing');
+      notificationHidden = false;
+    }
+  }
+}
+
+function sendName() {
+  socket.emit('name', userName);
+}
+
+function sendChat(msg) {
+  socket.emit('chat', msg);
+}
+
+// msg = {pid: pid, name: name}
+function receiveName(msg) {
+  var nameholder = participantList[msg.pid]["videoDiv"]["children"]["remoteTopCenter"]["children"][0];
+  nameholder.innerHTML = msg.name;
+}
+
+function hangupCall() {
+  if (confirm("Hagnup Call?")) {
+    window.open(window.location.origin, '_self', '');
+  }
 }
